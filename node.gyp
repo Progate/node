@@ -39,6 +39,9 @@
     'node_snapshot_main%': '',
     'node_use_amaro%': 'true',
     'node_use_bundled_v8%': 'true',
+    # Where the V8 API headers come from. An embedder that provides its own
+    # implementation of the API (see --without-bundled-v8) points this at it.
+    'node_v8_include_dir%': 'deps/v8/include',
     'node_use_lief%': 'false',
     'node_use_node_snapshot%': 'false',
     'node_use_openssl%': 'true',
@@ -600,7 +603,7 @@
 
       'include_dirs': [
         'src',
-        'deps/v8/include',
+        '<(node_v8_include_dir)',
         'deps/postject'
       ],
 
@@ -1100,7 +1103,7 @@
 
       'include_dirs': [
         'src',
-        'deps/v8/include',
+        '<(node_v8_include_dir)',
         'deps/uv/include',
       ],
 
@@ -1245,7 +1248,7 @@
       'include_dirs': [
         'src',
         'tools/msvs/genfiles',
-        'deps/v8/include',
+        '<(node_v8_include_dir)',
         'deps/cares/include',
         'deps/uv/include',
         'test/cctest',
@@ -1290,7 +1293,7 @@
       'include_dirs': [
         'src',
         'tools/msvs/genfiles',
-        'deps/v8/include',
+        '<(node_v8_include_dir)',
         'deps/cares/include',
         'deps/uv/include',
         'test/cctest',
@@ -1351,7 +1354,7 @@
       'include_dirs': [
         'src',
         'tools/msvs/genfiles',
-        'deps/v8/include',
+        '<(node_v8_include_dir)',
         'deps/cares/include',
         'deps/uv/include',
         'test/cctest',
@@ -1476,7 +1479,7 @@
         'src',
         'tools',
         'tools/msvs/genfiles',
-        'deps/v8/include',
+        '<(node_v8_include_dir)',
         'deps/cares/include',
         'deps/uv/include',
         'test/embedding',
@@ -1544,7 +1547,7 @@
       # Don't depend on node.gypi - it otherwise links to
       # the static libraries and resolve symbols at build time.
       'include_dirs': [
-        'deps/v8/include',
+        '<(node_v8_include_dir)',
       ],
 
       'sources': [
@@ -1682,7 +1685,7 @@
       'include_dirs': [
         'src',
         'tools/msvs/genfiles',
-        'deps/v8/include',
+        '<(node_v8_include_dir)',
         'deps/cares/include',
         'deps/uv/include',
       ],
