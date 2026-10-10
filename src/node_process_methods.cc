@@ -510,7 +510,7 @@ static void ReallyExit(const FunctionCallbackInfo<Value>& args) {
   env->Exit(code);
 }
 
-#if defined __POSIX__ && !defined(__PASE__)
+#if defined __POSIX__ && !defined(__PASE__) && !defined(__wasi__)
 // Clears FD_CLOEXEC on `fd` so the descriptor is inherited across execve(2).
 // On success returns the previous F_GETFD flags (>= 0) so callers can
 // restore them if execve(2) subsequently fails. On failure returns -1 with
@@ -810,7 +810,7 @@ static void CreatePerIsolateProperties(IsolateData* isolate_data,
   SetMethod(isolate, target, "dlopenBinary", binding::DLOpenBinary);
   SetMethod(isolate, target, "reallyExit", ReallyExit);
 
-#if defined __POSIX__ && !defined(__PASE__)
+#if defined __POSIX__ && !defined(__PASE__) && !defined(__wasi__)
   SetMethod(isolate, target, "execve", Execve);
 #endif
   SetMethodNoSideEffect(isolate, target, "uptime", Uptime);
@@ -858,7 +858,7 @@ void RegisterExternalReferences(ExternalReferenceRegistry* registry) {
   registry->Register(binding::DLOpenBinary);
   registry->Register(ReallyExit);
 
-#if defined __POSIX__ && !defined(__PASE__)
+#if defined __POSIX__ && !defined(__PASE__) && !defined(__wasi__)
   registry->Register(Execve);
 #endif
   registry->Register(Uptime);

@@ -627,6 +627,7 @@ static void PlatformInit(ProcessInitializationFlags::Flags flags) {
     RegisterSignalHandler(SIGTERM, SignalExit, true);
   }
 
+#if !defined(__wasi__)
   if (!(flags & ProcessInitializationFlags::kNoAdjustResourceLimits)) {
     // Raise the open file descriptor limit.
     struct rlimit lim;
@@ -649,6 +650,7 @@ static void PlatformInit(ProcessInitializationFlags::Flags flags) {
       } while (min + 1 < max);
     }
   }
+#endif  // !defined(__wasi__)
 #endif  // __POSIX__
 #ifdef _WIN32
   if (!(flags & ProcessInitializationFlags::kNoStdioInitialization)) {
