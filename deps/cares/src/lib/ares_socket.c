@@ -80,8 +80,10 @@ static ares_conn_err_t ares_socket_deref_error(int err)
       return ARES_CONN_ERR_CONNREFUSED;
     case ETIMEDOUT:
       return ARES_CONN_ERR_CONNTIMEDOUT;
+#ifdef EHOSTDOWN
     case EHOSTDOWN:
       return ARES_CONN_ERR_HOSTDOWN;
+#endif
     case EHOSTUNREACH:
       return ARES_CONN_ERR_HOSTUNREACH;
     case EINTR:
