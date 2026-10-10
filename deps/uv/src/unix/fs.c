@@ -275,7 +275,9 @@ static void uv__mkostemp_initonce(void) {
   /* z/os doesn't have RTLD_DEFAULT but that's okay
    * because it doesn't have mkostemp(O_CLOEXEC) either.
    */
-#ifdef RTLD_DEFAULT
+#if defined(__wasi__)
+  /* No dynamic symbol lookup; mkstemp() with FD_CLOEXEC is used instead. */
+#elif defined(RTLD_DEFAULT)
   uv__mkostemp = (int (*)(char*, int)) dlsym(RTLD_DEFAULT, "mkostemp");
 
   /* We don't care about errors, but we do want to clean them up.
@@ -451,6 +453,27 @@ static ssize_t uv__pwritev_emul(int fd,
 }
 
 
+#if defined(__wasi__)
+/* WASI's fd_pread and fd_pwrite take an iovec list. These wrappers give
+ * preadv/pwritev the signature of the cache below: wasm calls through a
+ * function pointer only with its exact type. */
+static ssize_t uv__wasi_preadv(int fd,
+                               const struct iovec* bufs,
+                               uv__iovcnt nbufs,
+                               off_t off) {
+  return preadv(fd, bufs, (int) nbufs, off);
+}
+
+
+static ssize_t uv__wasi_pwritev(int fd,
+                                const struct iovec* bufs,
+                                uv__iovcnt nbufs,
+                                off_t off) {
+  return pwritev(fd, bufs, (int) nbufs, off);
+}
+#endif
+
+
 /* The function pointer cache is an uintptr_t because _Atomic void*
  * doesn't work on macos/ios/etc...
  */
@@ -467,7 +490,12 @@ static ssize_t uv__preadv_or_pwritev(int fd,
 
   u.p = (void*) atomic_load_explicit(cache, memory_order_relaxed);
   if (u.p == NULL) {
-#ifdef RTLD_DEFAULT
+#if defined(__wasi__)
+    if (is_pread)
+      u.f = uv__wasi_preadv;
+    else
+      u.f = uv__wasi_pwritev;
+#elif defined(RTLD_DEFAULT)
     /* Try _LARGEFILE_SOURCE version of preadv/pwritev first,
      * then fall back to the plain version, for libcs like musl.
      */

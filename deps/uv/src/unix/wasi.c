@@ -44,7 +44,6 @@
 
 static char* process_argv0;
 static char* process_title;
-static size_t process_title_length;
 
 
 char** uv_setup_args(int argc, char** argv) {
@@ -70,7 +69,6 @@ int uv_set_process_title(const char* title) {
     return UV_ENOMEM;
   uv__free(process_title);
   process_title = copy;
-  process_title_length = strlen(copy);
   return 0;
 }
 
@@ -187,7 +185,7 @@ int uv_interface_addresses(uv_interface_address_t** addresses, int* count) {
   *count = 2;
 
   address = &(*addresses)[0];
-  address->name = uv__strdup("lo");
+  address->name = (char*) "lo";  /* uv_free_interface_addresses() frees only the array. */
   address->is_internal = 1;
   in4 = &address->address.address4;
   in4->sin_family = AF_INET;
@@ -197,7 +195,7 @@ int uv_interface_addresses(uv_interface_address_t** addresses, int* count) {
   in4->sin_addr.s_addr = htonl(0xff000000);
 
   address = &(*addresses)[1];
-  address->name = uv__strdup("lo");
+  address->name = (char*) "lo";
   address->is_internal = 1;
   in6 = &address->address.address6;
   in6->sin6_family = AF_INET6;
@@ -206,19 +204,5 @@ int uv_interface_addresses(uv_interface_address_t** addresses, int* count) {
   in6->sin6_family = AF_INET6;
   memset(&in6->sin6_addr, 0xff, sizeof(in6->sin6_addr));
 
-  if ((*addresses)[0].name == NULL || (*addresses)[1].name == NULL) {
-    uv_free_interface_addresses(*addresses, *count);
-    return UV_ENOMEM;
-  }
   return 0;
-}
-
-
-void uv_free_interface_addresses(uv_interface_address_t* addresses,
-                                 int count) {
-  int i;
-
-  for (i = 0; i < count; i++)
-    uv__free(addresses[i].name);
-  uv__free(addresses);
 }
