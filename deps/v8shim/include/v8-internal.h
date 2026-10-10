@@ -908,6 +908,16 @@ static_assert(HandleScopeData::kSizeInBytes == sizeof(HandleScopeData));
  * is necessary to implement inline functions in the v8 api.  Don't
  * depend on functions and constants defined here.
  */
+#if V8_HOST_ARCH_WASM32
+// browser-v8: implemented by the shim on top of the host engine.
+V8_EXPORT int ShimGetInstanceType(Address obj);
+V8_EXPORT Address ShimLoadMap(Address obj);
+V8_EXPORT int ShimGetOddballKind(Address obj);
+[[noreturn]] V8_EXPORT void ShimUnsupportedRawField(Address obj, int offset);
+V8_EXPORT bool ShimSameValue(Address lhs, Address rhs);
+V8_EXPORT void ShimSetReturnValue(Address* slot, Address value);
+#endif
+
 class Internals {
 #ifdef V8_MAP_PACKING
   V8_INLINE static constexpr Address UnpackMapWord(Address mapword) {
@@ -1213,6 +1223,21 @@ class Internals {
   }
 #endif
 
+#if V8_HOST_ARCH_WASM32
+  // browser-v8: a heap object is a value in the host engine's table.
+  V8_INLINE static int GetInstanceType(Address obj) {
+    return ShimGetInstanceType(obj);
+  }
+
+  V8_INLINE static Address LoadMap(Address obj) {
+    if (!HasHeapObjectTag(obj)) return kNullAddress;
+    return ShimLoadMap(obj);
+  }
+
+  V8_INLINE static int GetOddballKind(Address obj) {
+    return ShimGetOddballKind(obj);
+  }
+#else
   V8_INLINE static int GetInstanceType(Address obj) {
     Address map = ReadTaggedPointerField(obj, kHeapObjectMapOffset);
 #ifdef V8_MAP_PACKING
@@ -1233,6 +1258,7 @@ class Internals {
   V8_INLINE static int GetOddballKind(Address obj) {
     return SmiValue(ReadTaggedSignedField(obj, kOddballKindOffset));
   }
+#endif  // V8_HOST_ARCH_WASM32
 
   V8_INLINE static bool IsExternalTwoByteString(int instance_type) {
     int representation = (instance_type & kStringRepresentationAndEncodingMask);
@@ -1342,6 +1368,11 @@ class Internals {
 
   template <typename T>
   V8_INLINE static T ReadRawField(Address heap_object_ptr, int offset) {
+#if V8_HOST_ARCH_WASM32
+    // browser-v8: there is no heap object to read. Every caller is either
+    // replaced above or disabled by V8_ENABLE_CHECKS; reaching this is a bug.
+    ShimUnsupportedRawField(heap_object_ptr, offset);
+#endif
     Address addr = heap_object_ptr + offset - kHeapObjectTag;
 #ifdef V8_COMPRESS_POINTERS
     if constexpr (sizeof(T) > kApiTaggedSize) {
@@ -1808,7 +1839,12 @@ class HandleHelper final {
   V8_INLINE static bool EqualHandles(const T1& lhs, const T2& rhs) {
     if (lhs.IsEmpty()) return rhs.IsEmpty();
     if (rhs.IsEmpty()) return false;
+#if V8_HOST_ARCH_WASM32
+    // browser-v8: two handles to one value can hold different table entries.
+    return ShimSameValue(lhs.ptr(), rhs.ptr());
+#else
     return lhs.ptr() == rhs.ptr();
+#endif
   }
 };
 

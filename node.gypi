@@ -112,6 +112,9 @@
       # The bundled V8 targets above hand out their include directory.
       'include_dirs': [ '<(node_v8_include_dir)' ],
     }],
+    [ 'node_use_v8shim=="true"', {
+      'dependencies': [ 'deps/v8shim/v8shim.gyp:v8shim' ],
+    }],
     [ 'node_use_v8_platform=="true"', {
       'defines': [
         'NODE_USE_V8_PLATFORM=1',
