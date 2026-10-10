@@ -67,9 +67,13 @@ Isolate* Isolate::Allocate(const IsolateGroup& group) { return Allocate(); }
 
 void Isolate::Initialize(Isolate* isolate, const CreateParams& params) {
   shim::State& state = shim::GetState();
+  state.cpp_heap = params.cpp_heap;
   state.array_buffer_allocator = params.array_buffer_allocator;
   if (params.array_buffer_allocator_shared)
     state.array_buffer_allocator = params.array_buffer_allocator_shared.get();
+  if (state.platform != nullptr)
+    state.foreground_task_runner =
+        state.platform->GetForegroundTaskRunner(isolate);
 }
 
 Isolate* Isolate::New(const CreateParams& params) {
@@ -78,7 +82,7 @@ Isolate* Isolate::New(const CreateParams& params) {
   return isolate;
 }
 
-void Isolate::Dispose() {}
+void Isolate::Dispose() { shim::GetState().foreground_task_runner.reset(); }
 void Isolate::Deinitialize() {}
 void Isolate::Free(Isolate* isolate) {}
 
@@ -214,15 +218,12 @@ void Isolate::SetStackLimit(uintptr_t stack_limit) {}
 // --- Embedder data that is not inline ----------------------------------------
 
 Local<Data> Isolate::GetContinuationPreservedEmbedderDataV2() {
-  Address data = shim::GetState().continuation_data;
-  return Utils::ToLocal<Data>(data ? data : shim::Undefined());
+  return Utils::ToLocal<Data>(shim::host::continuation_data());
 }
 
 void Isolate::SetContinuationPreservedEmbedderDataV2(Local<Data> data) {
-  shim::State& state = shim::GetState();
-  if (state.continuation_data) shim::host::global_dispose(state.continuation_data);
-  state.continuation_data =
-      data.IsEmpty() ? 0 : shim::host::global_new(Utils::Open(data));
+  shim::host::set_continuation_data(
+      data.IsEmpty() ? shim::Undefined() : Utils::Open(data));
 }
 
 // --- Heap: the host engine owns it -------------------------------------------
@@ -267,7 +268,45 @@ void Isolate::RemoveNearHeapLimitCallback(NearHeapLimitCallback callback,
 
 uint64_t Isolate::GetHashSeed() { return 0; }
 
+CppHeap* Isolate::GetCppHeap() const { return shim::GetState().cpp_heap; }
+
+internal::Address* Isolate::GetDataFromSnapshotOnce(size_t index) {
+  return nullptr;
+}
+
+// No sampling: the host engine's stack is not ours to walk.
+void Isolate::GetStackSample(const RegisterState& state, void** frames,
+                             size_t frames_limit, SampleInfo* sample_info) {
+  sample_info->frames_count = 0;
+}
+
+bool Isolate::MeasureMemory(std::unique_ptr<MeasureMemoryDelegate> delegate,
+                            MeasureMemoryExecution execution) {
+  return false;
+}
+
+// There is one isolate and only its thread runs JavaScript.
+void Locker::Initialize(Isolate* isolate) {
+  has_lock_ = true;
+  top_level_ = true;
+  isolate_ = reinterpret_cast<internal::Isolate*>(isolate);
+}
+
+Locker::~Locker() = default;
+
 std::string Isolate::GetDefaultLocale() { return "en-US"; }
+
+// The host calls this when the host engine formats an error's stack, with the
+// frames that are not the host's own. Empty, with the exception pending, if
+// the callback threw.
+extern "C" __attribute__((export_name("v8shim_prepare_stack_trace"))) Address
+v8shim_prepare_stack_trace(Address context, Address error, Address sites) {
+  PrepareStackTraceCallback callback = shim::GetState().prepare_stack_trace;
+  if (callback == nullptr) return 0;
+  return Utils::Open(callback(Utils::ToLocal<Context>(context),
+                              Utils::ToLocal<Value>(error),
+                              Utils::ToLocal<Array>(sites)));
+}
 
 }  // namespace v8
 

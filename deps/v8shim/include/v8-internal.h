@@ -991,6 +991,7 @@ V8_EXPORT int ShimGetOddballKind(Address obj);
 [[noreturn]] V8_EXPORT void ShimUnsupportedRawField(Address obj, int offset);
 V8_EXPORT bool ShimSameValue(Address lhs, Address rhs);
 V8_EXPORT void ShimSetReturnValue(Address* slot, Address value);
+V8_EXPORT Address ShimCallbackInfoData(Address callback_info);
 #endif
 
 class Internals {

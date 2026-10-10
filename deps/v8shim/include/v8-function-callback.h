@@ -680,8 +680,13 @@ Isolate* PropertyCallbackInfo<T>::GetIsolate() const {
 template <typename T>
 Local<Value> PropertyCallbackInfo<T>::Data() const {
   internal::Address callback_info = args_[kCallbackInfoIndex];
+#if V8_HOST_ARCH_WASM32
+  // browser-v8: the callback info is a value in the host engine's table.
+  internal::Address data = internal::ShimCallbackInfoData(callback_info);
+#else
   internal::Address data =
       I::ReadTaggedPointerField(callback_info, I::kCallbackInfoDataOffset);
+#endif
   return Local<Value>::New(GetIsolate(), data);
 }
 
