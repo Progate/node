@@ -938,6 +938,12 @@ V8 shared library set USING_V8_SHARED.
 // build without pointer compression.
 #define V8_HOST_ARCH_WASM32 1
 #define V8_HOST_ARCH_32_BIT 1
+// Values live in the host engine, not in a V8 heap. V8_ENABLE_CHECKS makes the
+// inline functions call into the API instead of reading heap objects, and
+// makes HandleScope tell the API when it opens and closes.
+#ifndef V8_ENABLE_CHECKS
+#define V8_ENABLE_CHECKS 1
+#endif
 #else
 #error "Host architecture was not detected as supported by v8"
 #endif
