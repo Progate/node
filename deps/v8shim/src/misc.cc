@@ -56,6 +56,14 @@ SharedValueConveyor::~SharedValueConveyor() = default;
 SharedValueConveyor& SharedValueConveyor::operator=(
     SharedValueConveyor&& other) noexcept = default;
 
+// The host engine checks types itself; these casts have nothing to verify.
+void DictionaryTemplate::CheckCast(Data* that) {}
+void Module::CheckCast(Data* that) {}
+void ModuleRequest::CheckCast(Data* that) {}
+void Set::CheckCast(Value* that) {}
+void Signature::CheckCast(Data* that) {}
+void WasmMemoryObject::CheckCast(Value* that) {}
+
 namespace platform::tracing {
 
 TracingController::TracingController() = default;

@@ -4,6 +4,7 @@
 #ifndef V8SHIM_SRC_STATE_H_
 #define V8SHIM_SRC_STATE_H_
 
+#include <memory>
 #include <vector>
 
 #include "src/shim.h"
@@ -21,7 +22,14 @@ struct Interrupt {
 };
 
 struct State {
+  Platform* platform = nullptr;
+  // V8 holds the isolate's foreground task runner while the isolate lives.
+  // node's platform counts on it: its per-isolate data must outlive
+  // NodePlatform::Shutdown() when the process exits with the isolate alive.
+  std::shared_ptr<TaskRunner> foreground_task_runner;
+
   ArrayBuffer::Allocator* array_buffer_allocator = nullptr;
+  CppHeap* cpp_heap = nullptr;
 
   // Global entries of the contexts entered with Context::Enter(), innermost
   // last.
@@ -30,7 +38,6 @@ struct State {
   bool terminating = false;
   MicrotasksPolicy microtasks_policy = MicrotasksPolicy::kAuto;
   std::vector<Interrupt> interrupts;
-  Address continuation_data = 0;  // A global entry, or 0.
 
   FatalErrorCallback fatal_error_handler = nullptr;
   Isolate::AbortOnUncaughtExceptionCallback abort_on_uncaught_exception =
@@ -42,6 +49,9 @@ struct State {
       import_module_with_phase_dynamically = nullptr;
   HostInitializeImportMetaObjectCallback initialize_import_meta = nullptr;
   std::vector<MessageListener> message_listeners;
+
+  // The innermost open TryCatch; each links to the one around it.
+  TryCatch* try_catch_top = nullptr;
 };
 
 State& GetState();
