@@ -190,13 +190,16 @@ void uv__wait_children(uv_loop_t* loop) {
  * avoided. Since this isn't called on those targets, the function
  * doesn't even need to be defined for them.
  */
-static int uv__process_init_stdio(uv_stdio_container_t* container, int fds[2]) {
+static int uv__process_init_stdio(uv_stdio_container_t* container,
+                                  int index,
+                                  int fds[2]) {
   int mask;
   int fd;
   int ret;
   int size;
   int i;
 
+  (void) index;
   mask = UV_IGNORE | UV_CREATE_PIPE | UV_INHERIT_FD | UV_INHERIT_STREAM;
   size = 64 * 1024;
 
@@ -208,6 +211,37 @@ static int uv__process_init_stdio(uv_stdio_container_t* container, int fds[2]) {
     assert(container->data.stream != NULL);
     if (container->data.stream->type != UV_NAMED_PIPE)
       return UV_EINVAL;
+#if defined(__wasi__)
+    /* A child's stdin, stdout and stderr cannot be sockets here, only pipes:
+     * fds[0] is the parent's end and fds[1] the child's, in the direction the
+     * child uses it. A pipe asked for both ways (as node does) goes the way of
+     * its descriptor: the child reads 0 and writes 1 and 2. */
+    else if (index < 3) {
+      int ends[2];
+      int child_reads;
+
+      if ((container->flags & (UV_READABLE_PIPE | UV_WRITABLE_PIPE)) ==
+          UV_READABLE_PIPE)
+        child_reads = 1;
+      else if ((container->flags & (UV_READABLE_PIPE | UV_WRITABLE_PIPE)) ==
+               UV_WRITABLE_PIPE)
+        child_reads = 0;
+      else
+        child_reads = index == 0;
+
+      ret = uv_pipe(ends, 0, 0);
+      if (ret == 0) {
+        if (child_reads) {
+          fds[0] = ends[1];
+          fds[1] = ends[0];
+        } else {
+          fds[0] = ends[0];
+          fds[1] = ends[1];
+        }
+      }
+      return ret;
+    }
+#endif
     else {
       ret = uv_socketpair(SOCK_STREAM, 0, fds, 0, 0);
 
@@ -1093,7 +1127,7 @@ int uv_spawn(uv_loop_t* loop,
   }
 
   for (i = 0; i < options->stdio_count; i++) {
-    err = uv__process_init_stdio(options->stdio + i, pipes[i]);
+    err = uv__process_init_stdio(options->stdio + i, i, pipes[i]);
     if (err)
       goto error;
   }
