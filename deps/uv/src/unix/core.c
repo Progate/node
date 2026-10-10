@@ -1681,8 +1681,8 @@ int uv_cpumask_size(void) {
 }
 
 int uv_os_getpriority(uv_pid_t pid, int* priority) {
-#if defined(__QNX__)
-  /* QNX priority is not process-based */
+#if defined(__QNX__) || defined(__wasi__)
+  /* QNX priority is not process-based; WASI has no process priorities. */
   return UV_ENOSYS;
 #else
   int r;
@@ -1703,8 +1703,8 @@ int uv_os_getpriority(uv_pid_t pid, int* priority) {
 
 
 int uv_os_setpriority(uv_pid_t pid, int priority) {
-#if defined(__QNX__)
-  /* QNX priority is not process-based */
+#if defined(__QNX__) || defined(__wasi__)
+  /* QNX priority is not process-based; WASI has no process priorities. */
   return UV_ENOSYS;
 #else
   if (priority < UV_PRIORITY_HIGHEST || priority > UV_PRIORITY_LOW)
@@ -1724,6 +1724,13 @@ int uv_os_setpriority(uv_pid_t pid, int priority) {
  * So the output parameter priority is actually the nice value.
 */
 int uv_thread_getpriority(uv_thread_t tid, int* priority) {
+#if defined(__wasi__)
+  /* wasi-threads has no scheduling priorities. */
+  if (priority == NULL)
+    return UV_EINVAL;
+  *priority = 0;
+  return 0;
+#else
   int r;
   int policy;
   struct sched_param param;
@@ -1751,6 +1758,7 @@ int uv_thread_getpriority(uv_thread_t tid, int* priority) {
 
   *priority = param.sched_priority;
   return 0;
+#endif
 }
 
 #ifdef __linux__
@@ -1775,7 +1783,7 @@ static int set_nice_for_calling_thread(int priority) {
  * If the function fails, the return value is non-zero.
 */
 int uv_thread_setpriority(uv_thread_t tid, int priority) {
-#if !defined(__GNU__)
+#if !defined(__GNU__) && !defined(__wasi__)
   int r;
   int min;
   int max;
@@ -2185,6 +2193,10 @@ int uv__sock_reuseport(int fd) {
 
 /* Check if rlimit has any expressed restrictions on usable memory. */
 uint64_t uv__get_rlimit_max_memory(void) {
+#if defined(__wasi__)
+  /* No resource limits; the linear memory's maximum is the limit. */
+  return 0;
+#else
   struct rlimit rl;
   uint64_t result = 0;
   uint64_t rlimit_value;
@@ -2205,4 +2217,5 @@ uint64_t uv__get_rlimit_max_memory(void) {
 #endif
 
   return result;
+#endif
 }

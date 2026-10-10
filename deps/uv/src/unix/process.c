@@ -35,6 +35,11 @@
 #include <fcntl.h>
 #include <poll.h>
 
+#if defined(__wasi__)
+# include <spawn.h>
+extern char** environ;
+#endif
+
 #if defined(__APPLE__)
 # include <spawn.h>
 # include <paths.h>
@@ -284,6 +289,7 @@ static void uv__write_errno(int error_fd) {
 }
 
 
+#if !defined(__wasi__)
 static void uv__process_child_init(const uv_process_options_t* options,
                                    int stdio_count,
                                    int (*pipes)[2],
@@ -415,6 +421,7 @@ static void uv__process_child_init(const uv_process_options_t* options,
 
   uv__write_errno(error_fd);
 }
+#endif  /* !defined(__wasi__) */
 
 
 #if defined(__APPLE__)
@@ -816,6 +823,71 @@ error:
 }
 #endif
 
+#if defined(__wasi__)
+/* WASI has no fork(). BrowserOS starts programs with posix_spawn(3), whose
+ * file actions set up the child's stdio and working directory. */
+static int uv__spawn_and_init_child_wasi(const uv_process_options_t* options,
+                                         int stdio_count,
+                                         int (*pipes)[2],
+                                         pid_t* pid) {
+  posix_spawn_file_actions_t actions;
+  posix_spawnattr_t attrs;
+  sigset_t signals;
+  short flags;
+  int use_fd;
+  int fd;
+  int err;
+
+  if (options->flags & (UV_PROCESS_SETUID | UV_PROCESS_SETGID))
+    return UV_ENOTSUP;
+
+  err = posix_spawn_file_actions_init(&actions);
+  if (err)
+    return UV__ERR(err);
+  err = posix_spawnattr_init(&attrs);
+  if (err) {
+    posix_spawn_file_actions_destroy(&actions);
+    return UV__ERR(err);
+  }
+
+  /* The child starts with no signals blocked and every handler reset. */
+  flags = POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF;
+  if (options->flags & UV_PROCESS_DETACHED)
+    flags |= POSIX_SPAWN_SETSID;
+  sigemptyset(&signals);
+  posix_spawnattr_setsigmask(&attrs, &signals);
+  sigfillset(&signals);
+  posix_spawnattr_setsigdefault(&attrs, &signals);
+  posix_spawnattr_setflags(&attrs, flags);
+
+  if (options->cwd != NULL)
+    err = posix_spawn_file_actions_addchdir_np(&actions, options->cwd);
+
+  for (fd = 0; err == 0 && fd < stdio_count; fd++) {
+    use_fd = pipes[fd][1];
+    if (use_fd < 0) {
+      /* stdin, stdout and stderr go to /dev/null even for UV_IGNORE. */
+      if (fd < 3)
+        err = posix_spawn_file_actions_addopen(
+            &actions, fd, "/dev/null", fd == 0 ? O_RDONLY : O_RDWR, 0);
+    } else if (use_fd != fd) {
+      err = posix_spawn_file_actions_adddup2(&actions, use_fd, fd);
+    }
+  }
+
+  if (err == 0)
+    err = posix_spawnp(pid,
+                       options->file,
+                       &actions,
+                       &attrs,
+                       options->args,
+                       options->env != NULL ? options->env : environ);
+
+  posix_spawnattr_destroy(&attrs);
+  posix_spawn_file_actions_destroy(&actions);
+  return err ? UV__ERR(err) : 0;
+}
+#else
 static int uv__spawn_and_init_child_fork(const uv_process_options_t* options,
                                          int stdio_count,
                                          int (*pipes)[2],
@@ -856,6 +928,7 @@ static int uv__spawn_and_init_child_fork(const uv_process_options_t* options,
   /* Fork succeeded, in the parent process */
   return 0;
 }
+#endif  /* defined(__wasi__) */
 
 static int uv__spawn_and_init_child(
     uv_loop_t* loop,
@@ -868,6 +941,15 @@ static int uv__spawn_and_init_child(
   int err;
   int exec_errorno;
   ssize_t r;
+
+#if defined(__wasi__)
+  (void) signal_pipe;
+  (void) status;
+  (void) exec_errorno;
+  (void) r;
+  (void) loop;
+  return uv__spawn_and_init_child_wasi(options, stdio_count, pipes, pid);
+#else
 
 #if defined(__APPLE__)
   uv_once(&posix_spawn_init_once, uv__spawn_init_posix_spawn);
@@ -960,6 +1042,7 @@ static int uv__spawn_and_init_child(
   uv__close_nocheckstdio(signal_pipe[0]);
 
   return err;
+#endif  /* defined(__wasi__) */
 }
 #endif /* ISN'T TARGET_OS_TV || TARGET_OS_WATCH */
 

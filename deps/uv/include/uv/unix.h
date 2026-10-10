@@ -64,7 +64,7 @@
 # include "uv/bsd.h"
 #elif defined(__CYGWIN__) || \
       defined(__MSYS__)   || \
-      defined(__HAIKU__)  || \
+      defined(__HAIKU__) || defined(__wasi__)  || \
       defined(__QNX__)    || \
       defined(__GNU__)
 # include "uv/posix.h"
