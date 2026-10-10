@@ -15,7 +15,7 @@
           'target_name': 'zlib_adler32_simd',
           'type': 'static_library',
           'conditions': [
-            ['target_arch in "ia32 x64" and OS!="ios"', {
+            ['target_arch in "ia32 x64" and OS!="ios" and wasi==0', {
               'defines': [ 'ADLER32_SIMD_SSSE3' ],
               'conditions': [
                 ['OS=="win"', {
@@ -43,7 +43,7 @@
           'include_dirs': [ '<(ZLIB_ROOT)' ],
           'direct_dependent_settings': {
             'conditions': [
-              ['target_arch in "ia32 x64" and OS!="ios"', {
+              ['target_arch in "ia32 x64" and OS!="ios" and wasi==0', {
                 'defines': [ 'ADLER32_SIMD_SSSE3' ],
                 'conditions': [
                   ['OS=="win"', {
@@ -142,7 +142,7 @@
           'target_name': 'zlib_data_chunk_simd',
           'type': 'static_library',
           'conditions': [
-            ['target_arch in "ia32 x64" and OS!="ios"', {
+            ['target_arch in "ia32 x64" and OS!="ios" and wasi==0', {
               'defines': [ 'INFLATE_CHUNK_SIMD_SSE2' ],
               'conditions': [
                 ['target_arch=="x64"', {
@@ -158,12 +158,18 @@
                 }],
               ],
             }],
+            ['wasi==1', {
+              'defines': [ 'INFLATE_CHUNK_GENERIC' ],
+            }],
           ],
           'include_dirs': [ '<(ZLIB_ROOT)' ],
           'direct_dependent_settings': {
             'conditions': [
-              ['target_arch in "ia32 x64" and OS!="ios"', {
+              ['target_arch in "ia32 x64" and OS!="ios" and wasi==0', {
                 'defines': [ 'INFLATE_CHUNK_SIMD_SSE2' ],
+              }],
+              ['wasi==1', {
+                'defines': [ 'INFLATE_CHUNK_GENERIC' ],
               }],
               ['arm_fpu=="neon"', {
                 'defines': [ 'INFLATE_CHUNK_SIMD_NEON' ],
@@ -209,7 +215,7 @@
               'defines': [ 'CPU_NO_SIMD' ],
               'sources': [ '<(ZLIB_ROOT)/inflate.c' ],
             }],
-            ['target_arch in "ia32 x64" and OS!="ios"', {
+            ['target_arch in "ia32 x64" and OS!="ios" and wasi==0', {
               'dependencies': [
                 'zlib_adler32_simd',
                 # Disabled due to memory corruption.

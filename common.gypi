@@ -23,6 +23,8 @@
     'force_dynamic_crt%': 0,
     'node_use_v8_platform%': 'true',
     'node_use_bundled_v8%': 'true',
+    # Building for WebAssembly (wasm32-wasip1-threads) on BrowserOS.
+    'wasi%': 0,
     'node_v8_include_dir%': 'deps/v8/include',
     'node_module_version%': '',
     'node_with_ltcg%': '',

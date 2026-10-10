@@ -2,7 +2,7 @@
   'variables': {
     # WebAssembly (wasm32-wasip1-threads) on BrowserOS: a poll(2) event loop,
     # processes started with posix_spawn(3).
-    'uv_wasi%': 0,
+    'wasi%': 0,
     'conditions': [
       ['OS=="win"', {
         'shared_unix_defines': [ ],
@@ -257,10 +257,10 @@
             }],
           ],
         }],
-        [ 'OS in "linux mac ios android zos openharmony" and uv_wasi==0', {
+        [ 'OS in "linux mac ios android zos openharmony" and wasi==0', {
           'sources': [ 'src/unix/proctitle.c' ],
         }],
-        [ 'uv_wasi==1', {
+        [ 'wasi==1', {
           'defines': [ '_GNU_SOURCE' ],
           'sources': [
             'src/unix/no-fsevents.c',
@@ -291,7 +291,7 @@
             '_DARWIN_UNLIMITED_SELECT=1',
           ]
         }],
-        [ '(OS=="linux" or OS=="openharmony") and uv_wasi==0', {
+        [ '(OS=="linux" or OS=="openharmony") and wasi==0', {
           'defines': [ '_GNU_SOURCE' ],
           'sources': [
             '<@(uv_sources_linux)',

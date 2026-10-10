@@ -217,9 +217,13 @@
             '--std=gnu11'
           ],
         }],
-        [ 'OS=="linux"', {
+        [ 'OS=="linux" and wasi==0', {
           'include_dirs': [ 'config/linux' ],
           'sources': [ 'config/linux/ares_config.h' ]
+        }],
+        [ 'wasi==1', {
+          'include_dirs': [ 'config/wasi' ],
+          'sources': [ 'config/wasi/ares_config.h' ]
         }],
         [ 'OS=="mac" or OS=="ios"', {
           'include_dirs': [ 'config/darwin' ],
