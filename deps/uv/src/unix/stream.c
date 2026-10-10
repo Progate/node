@@ -622,6 +622,34 @@ int uv_listen(uv_stream_t* stream, int backlog, uv_connection_cb cb) {
 }
 
 
+#if defined(__wasi__)
+/* A child's stdio is a pipe here, not a socket pair (see process.c), and
+ * shutdown(2) does not work on a pipe. Closing the write end gives the reader
+ * its EOF; the descriptor is kept, pointing at /dev/null, for uv_close(). */
+static int uv__shutdown_write(int fd) {
+  int null_fd;
+
+  if (shutdown(fd, SHUT_WR) == 0)
+    return 0;
+  if (errno != ENOTSOCK)
+    return -1;
+  null_fd = uv__open_cloexec("/dev/null", O_WRONLY);
+  if (null_fd < 0) {
+    errno = -null_fd;
+    return -1;
+  }
+  if (dup2(null_fd, fd) < 0) {
+    uv__close(null_fd);
+    return -1;
+  }
+  uv__close(null_fd);
+  return 0;
+}
+#else
+# define uv__shutdown_write(fd) shutdown((fd), SHUT_WR)
+#endif
+
+
 static void uv__drain(uv_stream_t* stream) {
   uv_shutdown_t* req;
   int err;
@@ -647,7 +675,7 @@ static void uv__drain(uv_stream_t* stream) {
     if (stream->flags & UV_HANDLE_CLOSING)
       /* The user destroyed the stream before we got to do the shutdown. */
       err = UV_ECANCELED;
-    else if (shutdown(uv__stream_fd(stream), SHUT_WR))
+    else if (uv__shutdown_write(uv__stream_fd(stream)))
       err = UV__ERR(errno);
     else /* Success. */
       stream->flags |= UV_HANDLE_SHUT;
