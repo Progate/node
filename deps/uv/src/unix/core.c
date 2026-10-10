@@ -798,6 +798,11 @@ int uv_chdir(const char* dir) {
 
 
 void uv_disable_stdio_inheritance(void) {
+#if defined(__wasi__)
+  /* There is no exec(): a child started with posix_spawn(3) gets only the
+   * descriptors its file actions give it. FD_CLOEXEC always "succeeds", so
+   * the loop below would never stop. */
+#else
   int fd;
 
   /* Set the CLOEXEC flag on all open descriptors. Unconditionally try the
@@ -806,6 +811,7 @@ void uv_disable_stdio_inheritance(void) {
   for (fd = 0; ; fd++)
     if (uv__cloexec(fd, 1) && fd > 15)
       break;
+#endif
 }
 
 

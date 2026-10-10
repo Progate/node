@@ -135,6 +135,26 @@ int uv_thread_detach(uv_thread_t *tid) {
 }
 
 
+#if defined(__wasi__)
+/* WebAssembly calls through a function pointer only with its exact type, so
+ * `entry` cannot be passed to pthread_create() as a start routine. */
+struct uv__thread_start_args {
+  void (*entry)(void* arg);
+  void* arg;
+};
+
+
+static void* uv__thread_start(void* data) {
+  struct uv__thread_start_args args;
+
+  args = *(struct uv__thread_start_args*) data;
+  uv__free(data);
+  args.entry(args.arg);
+  return NULL;
+}
+#endif
+
+
 int uv_thread_create_ex(uv_thread_t* tid,
                         const uv_thread_options_t* params,
                         void (*entry)(void *arg),
@@ -177,8 +197,26 @@ int uv_thread_create_ex(uv_thread_t* tid,
       abort();
   }
 
+#if defined(__wasi__)
+  {
+    struct uv__thread_start_args* start;
+
+    (void) f;
+    start = uv__malloc(sizeof(*start));
+    if (start == NULL) {
+      err = ENOMEM;
+    } else {
+      start->entry = entry;
+      start->arg = arg;
+      err = pthread_create(tid, attr, uv__thread_start, start);
+      if (err)
+        uv__free(start);
+    }
+  }
+#else
   f.in = entry;
   err = pthread_create(tid, attr, f.out, arg);
+#endif
 
   if (attr != NULL)
     pthread_attr_destroy(attr);
