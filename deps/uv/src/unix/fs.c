@@ -76,7 +76,7 @@
 #elif defined(__sun)      || \
       defined(__MVS__)    || \
       defined(__NetBSD__) || \
-      defined(__HAIKU__)  || \
+      defined(__HAIKU__) || defined(__wasi__)  || \
       defined(__QNX__)
 # include <sys/statvfs.h>
 #else
@@ -207,7 +207,7 @@ static ssize_t uv__fs_fdatasync(uv_fs_t* req) {
     || defined(_AIX71)                                                        \
     || defined(__DragonFly__)                                                 \
     || defined(__FreeBSD__)                                                   \
-    || defined(__HAIKU__)                                                     \
+    || defined(__HAIKU__) || defined(__wasi__)                                                     \
     || defined(__NetBSD__)                                                    \
     || defined(__OpenBSD__)                                                   \
     || defined(__linux__)                                                     \
@@ -238,7 +238,7 @@ static ssize_t uv__fs_futime(uv_fs_t* req) {
     || defined(_AIX71)                                                        \
     || defined(__DragonFly__)                                                 \
     || defined(__FreeBSD__)                                                   \
-    || defined(__HAIKU__)                                                     \
+    || defined(__HAIKU__) || defined(__wasi__)                                                     \
     || defined(__NetBSD__)                                                    \
     || defined(__OpenBSD__)                                                   \
     || defined(__linux__)                                                     \
@@ -678,7 +678,7 @@ static int uv__fs_statfs(uv_fs_t* req) {
 #if defined(__sun)      || \
     defined(__MVS__)    || \
     defined(__NetBSD__) || \
-    defined(__HAIKU__)  || \
+    defined(__HAIKU__) || defined(__wasi__)  || \
     defined(__QNX__)
   struct statvfs buf;
 
@@ -700,7 +700,7 @@ static int uv__fs_statfs(uv_fs_t* req) {
     defined(__MVS__)      || \
     defined(__OpenBSD__)  || \
     defined(__NetBSD__)   || \
-    defined(__HAIKU__)    || \
+    defined(__HAIKU__) || defined(__wasi__)    || \
     defined(__QNX__)
   stat_fs->f_type = 0;  /* f_type is not supported. */
 #else
@@ -1144,7 +1144,7 @@ static ssize_t uv__fs_utime(uv_fs_t* req) {
     || defined(_AIX71)                                                        \
     || defined(__DragonFly__)                                                 \
     || defined(__FreeBSD__)                                                   \
-    || defined(__HAIKU__)                                                     \
+    || defined(__HAIKU__) || defined(__wasi__)                                                     \
     || defined(__NetBSD__)                                                    \
     || defined(__OpenBSD__)                                                   \
     || defined(__linux__)                                                     \
@@ -1179,7 +1179,7 @@ static ssize_t uv__fs_lutime(uv_fs_t* req) {
     || defined(_AIX71)                                                        \
     || defined(__DragonFly__)                                                 \
     || defined(__FreeBSD__)                                                   \
-    || defined(__HAIKU__)                                                     \
+    || defined(__HAIKU__) || defined(__wasi__)                                                     \
     || defined(__NetBSD__)                                                    \
     || defined(__OpenBSD__)                                                   \
     || defined(__linux__)                                                     \

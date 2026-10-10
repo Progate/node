@@ -125,6 +125,9 @@ static int uv__tty_is_slave(const int fd) {
     abort();
 
   result = (pts == major(sb.st_rdev));
+#elif defined(__wasi__)
+  /* BrowserOS terminals cannot be reopened by name. */
+  result = 0;
 #else
   /* Fallback to ptsname
    */
@@ -179,10 +182,14 @@ int uv_tty_init(uv_loop_t* loop, uv_tty_t* tty, int fd, int unused) {
      * master/slave pair (Linux). Therefore check if the fd points to a
      * slave device.
      */
+#if defined(__wasi__)
+    r = -1;
+#else
     if (uv__tty_is_slave(fd) && ttyname_r(fd, path, sizeof(path)) == 0)
       r = uv__open_cloexec(path, mode | O_NOCTTY);
     else
       r = -1;
+#endif
 
     if (r < 0) {
       /* fallback to using blocking writes */
