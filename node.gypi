@@ -108,6 +108,10 @@
         'tools/v8_gypfiles/v8.gyp:v8_libplatform',
       ],
     }],
+    [ 'node_use_bundled_v8!="true"', {
+      # The bundled V8 targets above hand out their include directory.
+      'include_dirs': [ '<(node_v8_include_dir)' ],
+    }],
     [ 'node_use_v8_platform=="true"', {
       'defines': [
         'NODE_USE_V8_PLATFORM=1',
@@ -246,7 +250,9 @@
         'dependencies': [ 'deps/simdjson/simdjson.gyp:simdjson' ],
     }],
 
-    [ 'node_shared_simdutf=="false" and node_use_bundled_v8!="false"', {
+    # simdutf and abseil ship inside deps/v8. An embedder that brings its own
+    # V8 API (node_v8_include_dir) still takes them from there.
+    [ 'node_shared_simdutf=="false" and (node_use_bundled_v8!="false" or node_v8_include_dir!="deps/v8/include")', {
         'dependencies': [ 'tools/v8_gypfiles/simdutf.gyp:simdutf' ],
     }],
 
