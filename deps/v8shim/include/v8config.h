@@ -183,6 +183,11 @@ path. Add it with -I<path> to the command line
 # define V8_OS_POSIX 1
 # define V8_OS_ZOS 1
 # define V8_OS_STRING "zos"
+
+#elif defined(__wasi__)
+# define V8_OS_POSIX 1
+# define V8_OS_WASI 1
+# define V8_OS_STRING "wasi"
 #endif
 
 // -----------------------------------------------------------------------------
@@ -907,6 +912,12 @@ V8 shared library set USING_V8_SHARED.
 #else
 #error "Cannot detect Riscv's bitwidth"
 #endif
+#elif defined(__wasm32__)
+// browser-v8: the API runs on top of the JavaScript engine that hosts the
+// WebAssembly instance. Handles and tagged values have the layout of a 32-bit
+// build without pointer compression.
+#define V8_HOST_ARCH_WASM32 1
+#define V8_HOST_ARCH_32_BIT 1
 #else
 #error "Host architecture was not detected as supported by v8"
 #endif
@@ -943,6 +954,10 @@ V8 shared library set USING_V8_SHARED.
 #elif __riscv_xlen == 32
 #define V8_TARGET_ARCH_RISCV32 1
 #endif
+#elif defined(__wasm32__)
+// No code is generated for the target. IA32 gives the layout the shim keeps:
+// 32-bit, little-endian, no pointer compression.
+#define V8_TARGET_ARCH_IA32 1
 #else
 #error Target architecture was not detected as supported by v8
 #endif
@@ -980,7 +995,7 @@ V8 shared library set USING_V8_SHARED.
 #endif
 
 // Check for supported combinations of host and target architectures.
-#if V8_TARGET_ARCH_IA32 && !V8_HOST_ARCH_IA32
+#if V8_TARGET_ARCH_IA32 && !(V8_HOST_ARCH_IA32 || V8_HOST_ARCH_WASM32)
 #error Target architecture ia32 is only supported on ia32 host
 #endif
 #if (V8_TARGET_ARCH_X64 && V8_TARGET_ARCH_64_BIT && \
