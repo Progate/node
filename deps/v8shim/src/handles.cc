@@ -4,9 +4,12 @@
 #include <stddef.h>
 #include <stdlib.h>
 
+#include <memory>
+#include <unordered_set>
 #include <vector>
 
 #include "src/shim.h"
+#include "src/state.h"
 
 namespace v8 {
 
@@ -145,7 +148,15 @@ void MoveGlobalReference(Address** from, Address** to) {
   if (node->location_addr == from) node->location_addr = to;
 }
 
+// Weak globals whose value the host collected and whose callbacks wait for
+// their task (see v8shim_weak_callback).
+std::unordered_set<Address*>& PendingWeak() {
+  static auto* pending = new std::unordered_set<Address*>();
+  return *pending;
+}
+
 void DisposeGlobal(Address* location) {
+  PendingWeak().erase(location);
   Node* node = NodeOf(location);
   shim::host::global_dispose(node->value);
   free(node);
@@ -225,11 +236,13 @@ void ShimSetReturnValue(Address* slot, Address value) {
 
 }  // namespace internal
 
-// The host calls this once a weak global's value has been collected. It runs
-// the first-pass callback and, if that asks for one, the second pass, as V8
-// does for WeakCallbackType::kParameter. Internal fields are not passed.
-extern "C" __attribute__((export_name("v8shim_weak_callback"))) void
-v8shim_weak_callback(Address* location) {
+namespace {
+
+// Runs the weak callbacks of a collected global: the first pass and, if it
+// asks for one, the second, as V8 does for WeakCallbackType::kParameter.
+// Internal fields are not passed.
+void RunWeakCallbacks(Address* location) {
+  if (api_internal::PendingWeak().erase(location) == 0) return;  // disposed meanwhile
   Node* node = NodeOf(location);
   if (node->callback == nullptr) {
     Address** location_addr = node->location_addr;
@@ -247,6 +260,33 @@ v8shim_weak_callback(Address* location) {
     WeakCallbackInfo<void> second(isolate, node->parameter, fields, nullptr);
     second_pass(second);
   }
+}
+
+class WeakCallbackTask final : public Task {
+ public:
+  explicit WeakCallbackTask(Address* location) : location_(location) {}
+  void Run() override { RunWeakCallbacks(location_); }
+
+ private:
+  Address* location_;
+};
+
+}  // namespace
+
+// The host calls this once a weak global's value has been collected. That can
+// be at any point the host engine is between tasks, including while the
+// program waits for its microtasks with C++ frames in the middle of their
+// work, so the callbacks (which delete node's objects) run later, as a task on
+// the isolate's foreground task runner, where V8 runs its second pass.
+extern "C" __attribute__((export_name("v8shim_weak_callback"))) void
+v8shim_weak_callback(Address* location) {
+  api_internal::PendingWeak().insert(location);
+  const std::shared_ptr<TaskRunner>& runner =
+      shim::GetState().foreground_task_runner;
+  if (runner)
+    runner->PostTask(std::make_unique<WeakCallbackTask>(location));
+  else
+    RunWeakCallbacks(location);
 }
 
 }  // namespace v8

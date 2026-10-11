@@ -24,6 +24,7 @@
         'src/profiler.cc',
         'src/templates.cc',
         'src/execution.cc',
+        'src/wasi.c',
       ],
     },
   ],

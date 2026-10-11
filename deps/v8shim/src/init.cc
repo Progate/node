@@ -38,6 +38,9 @@ void V8::InitializePlatform(Platform* platform) {
   shim::GetState().platform = platform;
 }
 bool V8::Dispose() { return true; }
+
+// The host engine seeds its own random numbers.
+void V8::SetEntropySource(EntropySource source) {}
 void V8::DisposePlatform() {}
 
 // Flags tune V8's compilers and heap; the host engine has its own.

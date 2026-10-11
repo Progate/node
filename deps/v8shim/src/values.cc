@@ -452,4 +452,10 @@ void* External::Value(ExternalPointerTypeTag tag) const {
   return reinterpret_cast<void*>(host::external_value(Self(this)));
 }
 
+// --- Dates -----------------------------------------------------------------------
+
+MaybeLocal<Value> Date::New(Local<Context> context, double time) {
+  return Utils::ToMaybeLocal<Value>(host::date_new(time));
+}
+
 }  // namespace v8
