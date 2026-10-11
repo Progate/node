@@ -305,8 +305,13 @@ void uv__udp_io(uv_loop_t* loop, uv__io_t* w, unsigned int events);
 #define uv__fs_event(loop, w, events) UNREACHABLE()
 #endif
 
-#ifndef __linux__
+#if !defined(__linux__) && !defined(__wasi__)
 #define uv__inotify_read(loop, w, events) UNREACHABLE()
+#endif
+
+#if defined(__wasi__)
+void uv__inotify_loop_init(uv_loop_t* loop);
+void uv__inotify_loop_delete(uv_loop_t* loop);
 #endif
 
 #ifndef __sun__

@@ -263,11 +263,11 @@
         [ 'wasi==1', {
           'defines': [ '_GNU_SOURCE' ],
           'sources': [
-            'src/unix/no-fsevents.c',
             'src/unix/posix-hrtime.c',
             'src/unix/posix-poll.c',
             'src/unix/random-getentropy.c',
             'src/unix/wasi.c',
+            'src/unix/wasi-inotify.c',
           ],
         }],
         [ 'OS != "zos"', {
