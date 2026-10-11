@@ -27,7 +27,7 @@
 #endif
 #include <dlfcn.h>
 #define HAVE_DLINFO 1
-#if defined(__SCO_VERSION__) || defined(_SCO_ELF) || (defined(__osf__) && !defined(RTLD_NEXT)) || (defined(__OpenBSD__) && !defined(RTLD_SELF)) || defined(__ANDROID__) || defined(__TANDEM)
+#if defined(__SCO_VERSION__) || defined(_SCO_ELF) || (defined(__osf__) && !defined(RTLD_NEXT)) || (defined(__OpenBSD__) && !defined(RTLD_SELF)) || defined(__ANDROID__) || defined(__TANDEM) || defined(__wasi__)
 #undef HAVE_DLINFO
 #endif
 #endif
