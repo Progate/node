@@ -22,10 +22,29 @@
 #ifndef UV_POSIX_H
 #define UV_POSIX_H
 
+#if defined(__wasi__)
+/* BrowserOS gives WASI programs inotify(7); uv_fs_event_t uses it as on
+ * Linux (src/unix/wasi-inotify.c). */
 #define UV_PLATFORM_LOOP_FIELDS                                               \
   struct pollfd* poll_fds;                                                    \
   size_t poll_fds_used;                                                       \
   size_t poll_fds_size;                                                       \
   unsigned char poll_fds_iterating;                                           \
+  uv__io_t inotify_read_watcher;                                              \
+  void* inotify_watchers;                                                     \
+  int inotify_fd;                                                             \
+
+#define UV_PLATFORM_FS_EVENT_FIELDS                                           \
+  struct uv__queue watchers;                                                  \
+  int wd;                                                                     \
+
+#else
+#define UV_PLATFORM_LOOP_FIELDS                                               \
+  struct pollfd* poll_fds;                                                    \
+  size_t poll_fds_used;                                                       \
+  size_t poll_fds_size;                                                       \
+  unsigned char poll_fds_iterating;                                           \
+
+#endif
 
 #endif /* UV_POSIX_H */

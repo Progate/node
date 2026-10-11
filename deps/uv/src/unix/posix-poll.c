@@ -38,10 +38,16 @@ int uv__platform_loop_init(uv_loop_t* loop) {
   loop->poll_fds_used = 0;
   loop->poll_fds_size = 0;
   loop->poll_fds_iterating = 0;
+#if defined(__wasi__)
+  uv__inotify_loop_init(loop);
+#endif
   return 0;
 }
 
 void uv__platform_loop_delete(uv_loop_t* loop) {
+#if defined(__wasi__)
+  uv__inotify_loop_delete(loop);
+#endif
   uv__free(loop->poll_fds);
   loop->poll_fds = NULL;
 }
