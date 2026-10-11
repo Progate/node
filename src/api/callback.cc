@@ -206,10 +206,31 @@ void InternalCallbackScope::Close() {
   // to initializes the tick callback during bootstrap.
   CHECK(!tick_callback.IsEmpty());
 
+#if defined(NODE_USE_V8SHIM)
+  // The host engine runs microtasks only when no JS is on the stack, so the
+  // runMicrotasks() that processTicksAndRejections() calls from JS does not
+  // run them. Run them here, where the tick callback has returned, and the
+  // ticks those microtasks schedule, until both queues are empty.
+  for (;;) {
+    if (tick_callback->Call(context, process, 0, nullptr).IsEmpty()) {
+      failed_ = true;
+      break;
+    }
+    perform_stopping_check();
+    if (env_->is_stopping() || !env_->can_call_into_js()) break;
+    context->GetMicrotaskQueue()->PerformCheckpoint(isolate);
+    perform_stopping_check();
+    if (env_->is_stopping() || !env_->can_call_into_js()) break;
+    if (!tick_info->has_tick_scheduled() &&
+        !tick_info->has_rejection_to_warn())
+      break;
+  }
+#else
   if (tick_callback->Call(context, process, 0, nullptr).IsEmpty()) {
     failed_ = true;
   }
   perform_stopping_check();
+#endif
 }
 
 MaybeLocal<Value> InternalMakeCallback(Environment* env,

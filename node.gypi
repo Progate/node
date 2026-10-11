@@ -114,6 +114,7 @@
     }],
     [ 'node_use_v8shim=="true"', {
       'dependencies': [ 'deps/v8shim/v8shim.gyp:v8shim' ],
+      'defines': [ 'NODE_USE_V8SHIM=1' ],
     }],
     [ 'node_use_v8_platform=="true"', {
       'defines': [
@@ -415,11 +416,12 @@
           'defines': [ 'OPENSSL_API_COMPAT=0x10100000L', ],
           'dependencies': [
             './deps/openssl/openssl.gyp:openssl',
-
-            # For tests
-            './deps/openssl/openssl.gyp:openssl-cli',
           ],
           'conditions': [
+            # For tests. WASI has no syslog(3) for the openssl command line.
+            [ 'wasi!=1', {
+              'dependencies': [ './deps/openssl/openssl.gyp:openssl-cli' ],
+            }],
             # -force_load or --whole-archive are not applicable for
             # the static library
             [ 'force_load=="true"', {
