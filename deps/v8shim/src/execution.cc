@@ -288,8 +288,9 @@ void ScriptOrigin::VerifyHostDefinedOptions() const {}
 namespace {
 
 Address CompileScript(Local<String> source, Local<Value> name, int line,
-                      int column) {
-  return host::script_compile(Utils::Open(source), OrZero(name), line, column);
+                      int column, Local<Data> host_defined_options) {
+  return host::script_compile(Utils::Open(source), OrZero(name), line, column,
+                              Utils::Open(host_defined_options));
 }
 
 }  // namespace
@@ -298,10 +299,10 @@ MaybeLocal<Script> Script::Compile(Local<Context> context, Local<String> source,
                                    ScriptOrigin* origin) {
   if (origin == nullptr)
     return Utils::ToMaybeLocal<Script>(
-        CompileScript(source, Local<Value>(), 0, 0));
-  return Utils::ToMaybeLocal<Script>(
-      CompileScript(source, origin->ResourceName(), origin->LineOffset(),
-                    origin->ColumnOffset()));
+        CompileScript(source, Local<Value>(), 0, 0, Local<Data>()));
+  return Utils::ToMaybeLocal<Script>(CompileScript(
+      source, origin->ResourceName(), origin->LineOffset(),
+      origin->ColumnOffset(), origin->GetHostDefinedOptions()));
 }
 
 MaybeLocal<Value> Script::Run(Local<Context> context) {
@@ -314,7 +315,8 @@ MaybeLocal<UnboundScript> ScriptCompiler::CompileUnboundScript(
   if (source->cached_data) source->cached_data->rejected = true;
   return Utils::ToMaybeLocal<UnboundScript>(
       CompileScript(source->source_string, source->resource_name,
-                    source->resource_line_offset, source->resource_column_offset));
+                    source->resource_line_offset, source->resource_column_offset,
+                    source->host_defined_options));
 }
 
 Local<Script> UnboundScript::BindToCurrentContext() {
@@ -345,7 +347,8 @@ MaybeLocal<Function> ScriptCompiler::CompileFunction(
       Utils::Open(source->source_string), OrZero(source->resource_name),
       source->resource_line_offset, source->resource_column_offset,
       parameters.data(), static_cast<uint32_t>(arguments_count),
-      extensions.data(), static_cast<uint32_t>(context_extension_count)));
+      extensions.data(), static_cast<uint32_t>(context_extension_count),
+      Utils::Open(source->host_defined_options)));
 }
 
 // There is no bytecode to cache. A cache is empty, and is rejected when it
