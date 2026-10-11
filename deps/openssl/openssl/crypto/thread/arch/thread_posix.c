@@ -84,8 +84,13 @@ int ossl_crypto_thread_native_perform_join(CRYPTO_THREAD *thread, CRYPTO_THREAD_
 
 int ossl_crypto_thread_native_exit(void)
 {
+#if defined(__wasi__)
+    /* WASI has no pthread_exit(); a thread ends by returning. */
+    return 0;
+#else
     pthread_exit(NULL);
     return 1;
+#endif
 }
 
 int ossl_crypto_thread_native_is_self(CRYPTO_THREAD *thread)
