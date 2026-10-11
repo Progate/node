@@ -153,6 +153,8 @@ V8SHIM_IMPORT(bigint_new) Address bigint_new(int64_t value, int32_t is_unsigned)
 // The low 64 bits, signed or not; *lossless says whether that is the whole value.
 V8SHIM_IMPORT(bigint_value) int64_t bigint_value(Address value, int32_t is_unsigned, int32_t* lossless);
 V8SHIM_IMPORT(identity_hash) int32_t identity_hash(Address value);
+// new Date(time).
+V8SHIM_IMPORT(date_new) Address date_new(double time);
 
 // --- Strings ------------------------------------------------------------------
 V8SHIM_IMPORT(string_new) Address string_new(Encoding encoding, const void* data, uint32_t length);

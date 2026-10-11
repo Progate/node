@@ -296,6 +296,18 @@ Locker::~Locker() = default;
 
 std::string Isolate::GetDefaultLocale() { return "en-US"; }
 
+// The host engine found a rejected promise with no handler (event 0), or a
+// handler added to one it reported (event 1).
+extern "C" __attribute__((export_name("v8shim_promise_reject"))) void
+v8shim_promise_reject(int32_t event, Address promise, Address value) {
+  PromiseRejectCallback callback = shim::GetState().promise_reject_callback;
+  if (callback == nullptr) return;
+  HandleScope scope(shim::TheIsolate());
+  callback(PromiseRejectMessage(Utils::ToLocal<Promise>(promise),
+                                static_cast<PromiseRejectEvent>(event),
+                                Utils::ToLocal<Value>(value)));
+}
+
 // The host calls this when the host engine formats an error's stack, with the
 // frames that are not the host's own. The result as a global entry the host
 // disposes of, or 0 with the exception pending if the callback threw.

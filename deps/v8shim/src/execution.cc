@@ -479,6 +479,10 @@ v8shim_uncaught_exception() {
   host::global_dispose(exception);
 }
 
+// An exception is on its way out of an API call: thrown and not yet taken by a
+// TryCatch.
+bool Isolate::HasPendingException() { return host::exception_pending() != 0; }
+
 bool TryCatch::HasCaught() const {
   TakePending(const_cast<TryCatch*>(this)->exception_);
   return exception_ != nullptr;
