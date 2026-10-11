@@ -485,6 +485,12 @@ void RegisterSignalHandler(int signal,
   memset(&sa, 0, sizeof(sa));
   sa.sa_sigaction = handler;
   sa.sa_flags = reset_handler ? SA_RESETHAND : 0;
+#if defined(__wasi__)
+  // The handler takes three arguments (sa_sigaction). Without SA_SIGINFO the
+  // libc calls it as sa_handler, with one, and WebAssembly traps on the
+  // signature mismatch that native ABIs let pass.
+  sa.sa_flags |= SA_SIGINFO;
+#endif
   sigfillset(&sa.sa_mask);
   CHECK_EQ(sigaction(signal, &sa, nullptr), 0);
 }
