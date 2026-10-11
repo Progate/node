@@ -155,6 +155,8 @@ V8SHIM_IMPORT(bigint_value) int64_t bigint_value(Address value, int32_t is_unsig
 V8SHIM_IMPORT(identity_hash) int32_t identity_hash(Address value);
 // new Date(time).
 V8SHIM_IMPORT(date_new) Address date_new(double time);
+// The host engine's heap, in bytes: 0 used, 1 total, 2 limit.
+V8SHIM_IMPORT(heap_size) double heap_size(int32_t which);
 
 // --- Strings ------------------------------------------------------------------
 V8SHIM_IMPORT(string_new) Address string_new(Encoding encoding, const void* data, uint32_t length);
@@ -373,7 +375,9 @@ enum ViewKind : int32_t {
 };
 
 // A new (Shared)ArrayBuffer holding a copy of `data`, with the store as its mirror.
-V8SHIM_IMPORT(array_buffer_new) Address array_buffer_new(void* holder, uintptr_t data, uint32_t length, int32_t shared);
+// `aliased`: C++ made it empty to share it with JS, which both keep writing
+// (node's AliasedBuffer), rather than to hand over contents it wrote.
+V8SHIM_IMPORT(array_buffer_new) Address array_buffer_new(void* holder, uintptr_t data, uint32_t length, int32_t shared, int32_t aliased);
 // The buffer's mirror (made if needed), brought up to date with the buffer.
 V8SHIM_IMPORT(array_buffer_pin) uintptr_t array_buffer_pin(Address buffer);
 V8SHIM_IMPORT(array_buffer_length) uint32_t array_buffer_length(Address buffer);

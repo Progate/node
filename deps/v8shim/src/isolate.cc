@@ -228,8 +228,20 @@ void Isolate::SetContinuationPreservedEmbedderDataV2(Local<Data> data) {
 
 // --- Heap: the host engine owns it -------------------------------------------
 
+// What the host engine says of its heap. Programs size their caches by the
+// limit (npm's lru-cache does), so it must not be zero.
 void Isolate::GetHeapStatistics(HeapStatistics* heap_statistics) {
   *heap_statistics = HeapStatistics();
+  size_t used = static_cast<size_t>(shim::host::heap_size(0));
+  size_t total = static_cast<size_t>(shim::host::heap_size(1));
+  size_t limit = static_cast<size_t>(shim::host::heap_size(2));
+  if (total < used) total = used;
+  if (limit < total) limit = total;
+  heap_statistics->used_heap_size_ = used;
+  heap_statistics->total_heap_size_ = total;
+  heap_statistics->total_physical_size_ = total;
+  heap_statistics->total_available_size_ = limit - used;
+  heap_statistics->heap_size_limit_ = limit;
 }
 
 size_t Isolate::NumberOfHeapSpaces() { return 0; }

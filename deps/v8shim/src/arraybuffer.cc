@@ -80,11 +80,16 @@ Holder* NewHolder(std::shared_ptr<BackingStore> store) {
 
 // A JavaScript ArrayBuffer for a backing store: the host copies the current
 // contents and keeps the store as the buffer's mirror.
-Address ArrayBufferFor(std::shared_ptr<BackingStore> store, bool shared) {
+// `aliased`: made empty by size (ArrayBuffer::New(isolate, length)), the way
+// node makes the buffers it shares with JS; one made from a backing store
+// hands over contents C++ already wrote.
+Address ArrayBufferFor(std::shared_ptr<BackingStore> store, bool shared,
+                       bool aliased) {
   StoreData* data = DataOf(store.get());
   return host::array_buffer_new(NewHolder(std::move(store)),
                                 reinterpret_cast<uintptr_t>(data->data),
-                                static_cast<uint32_t>(data->length), shared);
+                                static_cast<uint32_t>(data->length), shared,
+                                aliased);
 }
 
 Holder* Pin(Address buffer) {
@@ -173,13 +178,14 @@ Local<ArrayBuffer> ArrayBuffer::New(Isolate* isolate, size_t byte_length,
       AllocateStore(byte_length, BackingStoreInitializationMode::kZeroInitialized,
                     false));
   if (!store) shim::Fatal("out of memory for an ArrayBuffer (%zu)", byte_length);
-  return Utils::ToLocal<ArrayBuffer>(ArrayBufferFor(std::move(store), false));
+  return Utils::ToLocal<ArrayBuffer>(
+      ArrayBufferFor(std::move(store), false, true));
 }
 
 Local<ArrayBuffer> ArrayBuffer::New(Isolate* isolate,
                                     std::shared_ptr<BackingStore> backing_store) {
   return Utils::ToLocal<ArrayBuffer>(
-      ArrayBufferFor(std::move(backing_store), false));
+      ArrayBufferFor(std::move(backing_store), false, false));
 }
 
 size_t ArrayBuffer::ByteLength() const {
@@ -224,7 +230,8 @@ Local<SharedArrayBuffer> SharedArrayBuffer::New(
   std::shared_ptr<BackingStore> store(AllocateStore(
       byte_length, BackingStoreInitializationMode::kZeroInitialized, true));
   if (!store) shim::Fatal("out of memory for a SharedArrayBuffer (%zu)", byte_length);
-  return Utils::ToLocal<SharedArrayBuffer>(ArrayBufferFor(std::move(store), true));
+  return Utils::ToLocal<SharedArrayBuffer>(
+      ArrayBufferFor(std::move(store), true, true));
 }
 
 MaybeLocal<SharedArrayBuffer> SharedArrayBuffer::MaybeNew(
@@ -232,13 +239,14 @@ MaybeLocal<SharedArrayBuffer> SharedArrayBuffer::MaybeNew(
   std::shared_ptr<BackingStore> store(AllocateStore(
       byte_length, BackingStoreInitializationMode::kZeroInitialized, true));
   if (!store) return MaybeLocal<SharedArrayBuffer>();
-  return Utils::ToLocal<SharedArrayBuffer>(ArrayBufferFor(std::move(store), true));
+  return Utils::ToLocal<SharedArrayBuffer>(
+      ArrayBufferFor(std::move(store), true, true));
 }
 
 Local<SharedArrayBuffer> SharedArrayBuffer::New(
     Isolate* isolate, std::shared_ptr<BackingStore> backing_store) {
   return Utils::ToLocal<SharedArrayBuffer>(
-      ArrayBufferFor(std::move(backing_store), true));
+      ArrayBufferFor(std::move(backing_store), true, false));
 }
 
 size_t SharedArrayBuffer::ByteLength() const {
