@@ -17,6 +17,7 @@
         'src/init.cc',
         'src/isolate.cc',
         'src/misc.cc',
+        'src/modules.cc',
         'src/unimplemented.cc',
         'src/values.cc',
         'src/objects.cc',

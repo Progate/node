@@ -288,11 +288,42 @@ V8SHIM_IMPORT(context_extras) Address context_extras(Address context);
 // the extras binding's functions of the same name read and write it too.
 V8SHIM_IMPORT(continuation_data) Address continuation_data();
 V8SHIM_IMPORT(set_continuation_data) void set_continuation_data(Address data);
-V8SHIM_IMPORT(script_compile) Address script_compile(Address source, Address name, int32_t line_offset, int32_t column_offset);
+// `host_defined_options` (0 for none) is what a dynamic import() in the code
+// passes back to v8shim_import_dynamic.
+V8SHIM_IMPORT(script_compile) Address script_compile(Address source, Address name, int32_t line_offset, int32_t column_offset, Address host_defined_options);
 V8SHIM_IMPORT(script_run) Address script_run(Address script);
 // 0 the sourceURL, 1 the sourceMappingURL.
 V8SHIM_IMPORT(script_url) Address script_url(Address script, int32_t which);
-V8SHIM_IMPORT(compile_function) Address compile_function(Address source, Address name, int32_t line_offset, int32_t column_offset, const Address* parameters, uint32_t parameter_count, const Address* extensions, uint32_t extension_count);
+V8SHIM_IMPORT(compile_function) Address compile_function(Address source, Address name, int32_t line_offset, int32_t column_offset, const Address* parameters, uint32_t parameter_count, const Address* extensions, uint32_t extension_count, Address host_defined_options);
+
+// --- Modules -------------------------------------------------------------------
+// A module is a host record: a source text module (compiled by the host into
+// a function it runs at evaluation) or a synthetic module.
+enum ModuleFlag : int32_t { kModuleIsSourceText, kModuleIsGraphAsync, kModuleHasTopLevelAwait };
+enum ModuleRequestPart : int32_t { kRequestSpecifier, kRequestAttributes };
+enum ModuleRequestNumber : int32_t { kRequestPhase, kRequestSourceOffset };
+V8SHIM_IMPORT(module_compile) Address module_compile(Address source, Address name, int32_t line_offset, int32_t column_offset, Address host_defined_options);
+// An array of ModuleRequest records, in source order.
+V8SHIM_IMPORT(module_requests) Address module_requests(Address module);
+V8SHIM_IMPORT(module_request_part) Address module_request_part(Address request, ModuleRequestPart part);
+V8SHIM_IMPORT(module_request_number) int32_t module_request_number(Address request, ModuleRequestNumber which);
+// Module::Status.
+V8SHIM_IMPORT(module_status) int32_t module_status(Address module);
+V8SHIM_IMPORT(module_exception) Address module_exception(Address module);
+V8SHIM_IMPORT(module_namespace) Address module_namespace(Address module);
+V8SHIM_IMPORT(module_flag) int32_t module_flag(Address module, ModuleFlag flag);
+// 0 the sourceURL, 1 the sourceMappingURL of a source text module.
+V8SHIM_IMPORT(module_url) Address module_url(Address module, int32_t which);
+// Links the graph: for each request not linked yet, the host calls
+// v8shim_resolve_module(callback, by_index, ...). 1, or 0 with the exception
+// pending.
+V8SHIM_IMPORT(module_instantiate) int32_t module_instantiate(Address context, Address module, uintptr_t callback, int32_t by_index);
+// The promise of the evaluation, or 0 with the exception pending.
+V8SHIM_IMPORT(module_evaluate) Address module_evaluate(Address context, Address module);
+// A synthetic module; its evaluation calls v8shim_synthetic_steps(steps, ...).
+V8SHIM_IMPORT(module_synthetic_new) Address module_synthetic_new(Address name, Address export_names, uintptr_t steps);
+// 1, or -1 with the exception pending (not one of its export names).
+V8SHIM_IMPORT(module_synthetic_set) int32_t module_synthetic_set(Address module, Address name, Address value);
 
 // --- Errors, messages, stack traces ---------------------------------------------
 enum ErrorKind : int32_t { kError, kRangeError, kReferenceError, kSyntaxError, kTypeError };

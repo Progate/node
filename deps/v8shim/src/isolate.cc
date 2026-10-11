@@ -297,15 +297,17 @@ Locker::~Locker() = default;
 std::string Isolate::GetDefaultLocale() { return "en-US"; }
 
 // The host calls this when the host engine formats an error's stack, with the
-// frames that are not the host's own. Empty, with the exception pending, if
-// the callback threw.
+// frames that are not the host's own. The result as a global entry the host
+// disposes of, or 0 with the exception pending if the callback threw.
 extern "C" __attribute__((export_name("v8shim_prepare_stack_trace"))) Address
 v8shim_prepare_stack_trace(Address context, Address error, Address sites) {
   PrepareStackTraceCallback callback = shim::GetState().prepare_stack_trace;
   if (callback == nullptr) return 0;
-  return Utils::Open(callback(Utils::ToLocal<Context>(context),
-                              Utils::ToLocal<Value>(error),
-                              Utils::ToLocal<Array>(sites)));
+  HandleScope scope(shim::TheIsolate());
+  Address result = Utils::Open(callback(Utils::ToLocal<Context>(context),
+                                        Utils::ToLocal<Value>(error),
+                                        Utils::ToLocal<Array>(sites)));
+  return result == 0 ? 0 : shim::host::global_new(result);
 }
 
 }  // namespace v8
