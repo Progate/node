@@ -4,6 +4,7 @@
 #ifndef V8SHIM_SRC_STATE_H_
 #define V8SHIM_SRC_STATE_H_
 
+#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -21,21 +22,25 @@ struct Interrupt {
   void* data;
 };
 
+// One per isolate. Each isolate has its own thread (node's worker_threads),
+// which runs in its own host engine; another thread may still reach it
+// through the Isolate* (Worker::Exit terminates the worker's isolate).
 struct State {
-  Platform* platform = nullptr;
   // V8 holds the isolate's foreground task runner while the isolate lives.
   // node's platform counts on it: its per-isolate data must outlive
   // NodePlatform::Shutdown() when the process exits with the isolate alive.
   std::shared_ptr<TaskRunner> foreground_task_runner;
 
   ArrayBuffer::Allocator* array_buffer_allocator = nullptr;
+  // Kept as V8 keeps it: node's Worker gives the isolate the only reference.
+  std::shared_ptr<ArrayBuffer::Allocator> array_buffer_allocator_shared;
   CppHeap* cpp_heap = nullptr;
 
   // Global entries of the contexts entered with Context::Enter(), innermost
   // last.
   std::vector<Address> entered_contexts;
 
-  bool terminating = false;
+  std::atomic<bool> terminating{false};
   MicrotasksPolicy microtasks_policy = MicrotasksPolicy::kAuto;
   std::vector<Interrupt> interrupts;
 
@@ -54,7 +59,12 @@ struct State {
   TryCatch* try_catch_top = nullptr;
 };
 
+// The state of the current thread's isolate.
 State& GetState();
+State& StateOf(Isolate* isolate);
+
+// The platform is the program's (V8::InitializePlatform).
+Platform*& GlobalPlatform();
 
 }  // namespace v8::shim
 

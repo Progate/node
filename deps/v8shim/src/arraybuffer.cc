@@ -32,6 +32,8 @@ struct StoreData {
   void* data;
   size_t length;
   bool shared;
+  // Stands for a SharedArrayBuffer of some isolate (v8shim_store_token).
+  bool token = false;
   BackingStore::DeleterCallback deleter;
   void* deleter_data;
 };
@@ -44,7 +46,7 @@ BackingStore* NewStore(void* data, size_t length, bool shared,
                        BackingStore::DeleterCallback deleter,
                        void* deleter_data) {
   void* memory = ::operator new(sizeof(StoreData));
-  new (memory) StoreData{data, length, shared, deleter, deleter_data};
+  new (memory) StoreData{data, length, shared, false, deleter, deleter_data};
   return reinterpret_cast<BackingStore*>(memory);
 }
 
@@ -83,12 +85,14 @@ Holder* NewHolder(std::shared_ptr<BackingStore> store) {
 // `aliased`: made empty by size (ArrayBuffer::New(isolate, length)), the way
 // node makes the buffers it shares with JS; one made from a backing store
 // hands over contents C++ already wrote.
+// `shared` is 2 for a token (see shared_buffer_token).
 Address ArrayBufferFor(std::shared_ptr<BackingStore> store, bool shared,
                        bool aliased) {
   StoreData* data = DataOf(store.get());
+  int32_t kind = data->token ? 2 : shared ? 1 : 0;
   return host::array_buffer_new(NewHolder(std::move(store)),
                                 reinterpret_cast<uintptr_t>(data->data),
-                                static_cast<uint32_t>(data->length), shared,
+                                static_cast<uint32_t>(data->length), kind,
                                 aliased);
 }
 
@@ -114,6 +118,29 @@ v8shim_store_new(uint32_t length, int32_t shared) {
   if (data == nullptr) shim::Fatal("out of memory for an ArrayBuffer (%u)", length);
   return NewHolder(std::shared_ptr<BackingStore>(
       NewStore(data, length, shared != 0, FreeWithLibc, nullptr)));
+}
+
+// What the hosts of this program's threads share about SharedArrayBuffers:
+// the name of the channel they pass them on (a number the first of them
+// picks) and the last serial number of a token. The same for every thread
+// because the memory is shared.
+extern "C" __attribute__((export_name("v8shim_shared_channel"))) uint32_t*
+v8shim_shared_channel() {
+  alignas(8) static uint32_t channel[2] = {0, 0};
+  return channel;
+}
+
+// The host asks for a token for a SharedArrayBuffer (see shared_buffer_token):
+// a store whose data holds the token's serial number, which names the buffer
+// between the hosts.
+extern "C" __attribute__((export_name("v8shim_store_token"))) Holder*
+v8shim_store_token(uint32_t length, uint32_t serial) {
+  auto* key = static_cast<uint32_t*>(malloc(sizeof(uint32_t)));
+  if (key == nullptr) shim::Fatal("out of memory for a SharedArrayBuffer token");
+  *key = serial;
+  BackingStore* store = NewStore(key, length, true, FreeWithLibc, nullptr);
+  DataOf(store)->token = true;
+  return NewHolder(std::shared_ptr<BackingStore>(store));
 }
 
 extern "C" __attribute__((export_name("v8shim_store_data"))) uintptr_t
@@ -245,6 +272,12 @@ MaybeLocal<SharedArrayBuffer> SharedArrayBuffer::MaybeNew(
 
 Local<SharedArrayBuffer> SharedArrayBuffer::New(
     Isolate* isolate, std::shared_ptr<BackingStore> backing_store) {
+  // A token from another isolate: its buffer may still be on its way here.
+  StoreData* store = DataOf(backing_store.get());
+  uintptr_t data = reinterpret_cast<uintptr_t>(store->data);
+  if (store->token && !host::shared_buffer_has(data) &&
+      host::microtask_can_suspend())
+    host::shared_buffer_wait(data);
   return Utils::ToLocal<SharedArrayBuffer>(
       ArrayBufferFor(std::move(backing_store), true, false));
 }
@@ -257,8 +290,10 @@ void* SharedArrayBuffer::Data() const {
   return DataOf(Pin(Self(this))->get())->data;
 }
 
+// The store stands for the buffer to pass it to another isolate (node's
+// messaging); Data() gives the contents.
 std::shared_ptr<BackingStore> SharedArrayBuffer::GetBackingStore() {
-  return *Pin(Self(this));
+  return *reinterpret_cast<Holder*>(host::shared_buffer_token(Self(this)));
 }
 
 size_t SharedArrayBuffer::CopyArrayBufferBytes(

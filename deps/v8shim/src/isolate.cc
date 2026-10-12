@@ -1,9 +1,11 @@
-// The isolate: one per program, standing for the host engine itself.
+// The isolate: one per thread, standing for the host engine of that thread
+// (the main thread, and each of node's worker_threads).
 
 #include <stdlib.h>
 #include <string.h>
 
 #include <algorithm>
+#include <new>
 #include <vector>
 
 #include "src/shim.h"
@@ -27,7 +29,12 @@ constexpr size_t kIsolateSize = std::max<size_t>({
     I::kIsolateLongTaskStatsCounterOffset + sizeof(size_t),
 });
 
-Isolate* the_isolate = nullptr;
+thread_local Isolate* the_isolate = nullptr;
+
+// The state follows the isolate's memory, aligned.
+constexpr size_t kStateOffset =
+    (kIsolateSize + alignof(shim::State) - 1) / alignof(shim::State) *
+    alignof(shim::State);
 
 void FillRoots(Isolate* isolate) {
   for (int index : {I::kUndefinedValueRootIndex, I::kTheHoleValueRootIndex,
@@ -45,8 +52,9 @@ Isolate* TheIsolate() {
   if (the_isolate == nullptr) {
     // The memory has to exist before the embedder creates the isolate:
     // handles to roots can be made first (e.g. by v8::Undefined()).
-    void* memory = calloc(1, kIsolateSize);
+    void* memory = calloc(1, kStateOffset + sizeof(State));
     V8SHIM_CHECK(memory != nullptr);
+    ::new (static_cast<char*>(memory) + kStateOffset) State();
     the_isolate = static_cast<Isolate*>(memory);
     I::GetHandleScopeData(the_isolate)->Initialize();
     FillRoots(the_isolate);
@@ -66,14 +74,16 @@ Isolate* Isolate::Allocate() { return shim::TheIsolate(); }
 Isolate* Isolate::Allocate(const IsolateGroup& group) { return Allocate(); }
 
 void Isolate::Initialize(Isolate* isolate, const CreateParams& params) {
-  shim::State& state = shim::GetState();
+  shim::State& state = shim::StateOf(isolate);
   state.cpp_heap = params.cpp_heap;
   state.array_buffer_allocator = params.array_buffer_allocator;
-  if (params.array_buffer_allocator_shared)
+  if (params.array_buffer_allocator_shared) {
+    state.array_buffer_allocator_shared = params.array_buffer_allocator_shared;
     state.array_buffer_allocator = params.array_buffer_allocator_shared.get();
-  if (state.platform != nullptr)
+  }
+  if (shim::GlobalPlatform() != nullptr)
     state.foreground_task_runner =
-        state.platform->GetForegroundTaskRunner(isolate);
+        shim::GlobalPlatform()->GetForegroundTaskRunner(isolate);
 }
 
 Isolate* Isolate::New(const CreateParams& params) {
@@ -117,12 +127,14 @@ Local<Value> Isolate::ThrowException(Local<Value> exception) {
   return Utils::ToLocal<Value>(shim::Undefined());
 }
 
-void Isolate::TerminateExecution() { shim::GetState().terminating = true; }
+void Isolate::TerminateExecution() { shim::StateOf(this).terminating = true; }
 
-bool Isolate::IsExecutionTerminating() { return shim::GetState().terminating; }
+bool Isolate::IsExecutionTerminating() {
+  return shim::StateOf(this).terminating;
+}
 
 void Isolate::CancelTerminateExecution() {
-  shim::GetState().terminating = false;
+  shim::StateOf(this).terminating = false;
 }
 
 Isolate::AllowJavascriptExecutionScope::AllowJavascriptExecutionScope(
@@ -338,9 +350,16 @@ v8shim_prepare_stack_trace(Address context, Address error, Address sites) {
 
 namespace v8::shim {
 
-State& GetState() {
-  static auto* state = new State();
-  return *state;
+State& StateOf(Isolate* isolate) {
+  return *reinterpret_cast<State*>(reinterpret_cast<char*>(isolate) +
+                                   kStateOffset);
+}
+
+State& GetState() { return StateOf(TheIsolate()); }
+
+Platform*& GlobalPlatform() {
+  static Platform* platform = nullptr;
+  return platform;
 }
 
 }  // namespace v8::shim

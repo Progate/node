@@ -35,7 +35,7 @@ const char* V8::GetVersion() { return V8_VERSION_STRING "-browser-v8"; }
 
 bool V8::Initialize(const int build_config) { return true; }
 void V8::InitializePlatform(Platform* platform) {
-  shim::GetState().platform = platform;
+  shim::GlobalPlatform() = platform;
 }
 bool V8::Dispose() { return true; }
 
@@ -261,7 +261,7 @@ namespace {
 PersistentRegion& Region() {
   static HeapBase heap;
   static FatalOutOfMemoryHandler oom;
-  static auto* region = new PersistentRegion(heap, oom);
+  static thread_local auto* region = new PersistentRegion(heap, oom);
   return *region;
 }
 

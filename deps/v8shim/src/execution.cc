@@ -35,7 +35,8 @@ struct ContextData {
 };
 
 std::unordered_map<Address, ContextData>& Contexts() {
-  static auto* contexts = new std::unordered_map<Address, ContextData>();
+  static thread_local auto* contexts =
+      new std::unordered_map<Address, ContextData>();
   return *contexts;
 }
 
@@ -125,7 +126,7 @@ std::unique_ptr<MicrotaskQueue> MicrotaskQueue::New(Isolate* isolate,
 namespace {
 
 MicrotaskQueue* DefaultMicrotaskQueue() {
-  static auto* queue = NewQueue();
+  static thread_local auto* queue = NewQueue();
   return queue;
 }
 

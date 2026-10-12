@@ -22,13 +22,13 @@ namespace {
 constexpr size_t kBlockSize = 1022;
 
 std::vector<Address*>& Blocks() {
-  static auto* blocks = new std::vector<Address*>();
+  static thread_local auto* blocks = new std::vector<Address*>();
   return *blocks;
 }
 
 // The host table mark of every open HandleScope, innermost last.
 std::vector<uint32_t>& Marks() {
-  static auto* marks = new std::vector<uint32_t>();
+  static thread_local auto* marks = new std::vector<uint32_t>();
   return *marks;
 }
 
@@ -151,7 +151,7 @@ void MoveGlobalReference(Address** from, Address** to) {
 // Weak globals whose value the host collected and whose callbacks wait for
 // their task (see v8shim_weak_callback).
 std::unordered_set<Address*>& PendingWeak() {
-  static auto* pending = new std::unordered_set<Address*>();
+  static thread_local auto* pending = new std::unordered_set<Address*>();
   return *pending;
 }
 
