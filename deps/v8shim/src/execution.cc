@@ -139,6 +139,13 @@ v8shim_run_microtask(uintptr_t callback, uintptr_t data, Address value) {
   reinterpret_cast<MicrotaskCallback>(callback)(reinterpret_cast<void*>(data));
 }
 
+// libuv waits in the loop by suspending the thread (JSPI) when it can, so
+// that the host's event loop turns (posix-poll.c in deps/uv): only with no
+// JavaScript on the stack, as for the microtask checkpoint.
+extern "C" int uv__wasi_can_suspend(void) {
+  return host::microtask_can_suspend();
+}
+
 void Isolate::PerformMicrotaskCheckpoint() {
   DefaultMicrotaskQueue()->PerformCheckpoint(this);
 }

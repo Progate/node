@@ -255,9 +255,21 @@ static void WriteNodeReport(Isolate* isolate,
     // --process-timeout forces the process to exit shortly after it triggers
     // the report, so do not wait for Worker threads that are blocked, e.g. in
     // a synchronous native call. They are left out of the report.
+#if defined(NODE_USE_V8SHIM)
+    // browser-v8: an interrupt cannot wake a Worker that waits in
+    // Atomics.wait / memory.atomic.wait (the wasm thread pools of napi-rs
+    // bindings do), so wait for the Worker threads as for --process-timeout.
+    const bool wait_forever = false;
+#else
     const bool wait_forever = trigger != kProcessTimeoutReportTrigger;
-    const uint64_t deadline =
-        uv_hrtime() + kProcessTimeoutResponseGraceMs * 1000 * 1000;
+#endif
+#if defined(NODE_USE_V8SHIM)
+    // A Worker that can answer does so from its event loop at once.
+    const uint64_t grace_ms = 500;
+#else
+    const uint64_t grace_ms = kProcessTimeoutResponseGraceMs;
+#endif
+    const uint64_t deadline = uv_hrtime() + grace_ms * 1000 * 1000;
     Mutex::ScopedLock lock(shared->mutex);
     shared->infos.reserve(expected_results);
     while (shared->infos.size() < expected_results) {

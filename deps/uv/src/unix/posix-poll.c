@@ -57,6 +57,109 @@ int uv__io_fork(uv_loop_t* loop) {
   return uv__platform_loop_init(loop);
 }
 
+#if defined(__wasi__)
+#include <wasi/api.h>
+
+/* BrowserOS: a thread whose host engine runs JavaScript (node's isolates in
+ * @progate/browser-v8) has work of the host's own to do while the loop waits:
+ * promises the host settles (WebAssembly.compile, Atomics.waitAsync), objects
+ * other threads pass to it. Blocking in poll() would keep the host's event
+ * loop from turning, so such a thread waits in a poll_oneoff that suspends it
+ * (JSPI) instead. Whether it can is the embedder's to say: only when no
+ * JavaScript is on the stack. */
+__attribute__((import_module("browser_wasi_async"), import_name("poll_oneoff")))
+int32_t uv__wasi_poll_oneoff_suspending(const __wasi_subscription_t* in,
+                                        __wasi_event_t* out,
+                                        uint32_t nsubscriptions,
+                                        uint32_t* nevents);
+
+int uv__wasi_can_suspend(void) __attribute__((weak));
+
+/* poll(2) through the suspending poll_oneoff, as wasi-libc builds it. */
+static int uv__wasi_poll_suspending(struct pollfd* fds,
+                                    nfds_t nfds,
+                                    int timeout) {
+  __wasi_subscription_t subscriptions[2 * nfds + 1];
+  __wasi_event_t events[2 * nfds + 1];
+  uint32_t nsubscriptions = 0;
+  uint32_t nevents = 0;
+  nfds_t i;
+  int count;
+
+  for (i = 0; i < nfds; i++) {
+    fds[i].revents = 0;
+    if (fds[i].fd < 0) continue;
+    if (fds[i].events & POLLRDNORM) {
+      subscriptions[nsubscriptions++] = (__wasi_subscription_t){
+          .userdata = (uintptr_t)&fds[i],
+          .u.tag = __WASI_EVENTTYPE_FD_READ,
+          .u.u.fd_read.file_descriptor = fds[i].fd,
+      };
+    }
+    if (fds[i].events & POLLWRNORM) {
+      subscriptions[nsubscriptions++] = (__wasi_subscription_t){
+          .userdata = (uintptr_t)&fds[i],
+          .u.tag = __WASI_EVENTTYPE_FD_WRITE,
+          .u.u.fd_write.file_descriptor = fds[i].fd,
+      };
+    }
+  }
+  if (timeout >= 0 || nsubscriptions == 0) {
+    uint64_t ns = timeout >= 0 ? (uint64_t)timeout * 1000000 : UINT64_C(0x7fffffff) * 1000000000;
+    subscriptions[nsubscriptions++] = (__wasi_subscription_t){
+        .u.tag = __WASI_EVENTTYPE_CLOCK,
+        .u.u.clock.id = __WASI_CLOCKID_MONOTONIC,
+        .u.u.clock.timeout = ns,
+    };
+  }
+
+  int32_t error = uv__wasi_poll_oneoff_suspending(subscriptions, events,
+                                                  nsubscriptions, &nevents);
+  if (error != 0) {
+    errno = error;
+    return -1;
+  }
+
+  for (i = 0; i < nevents; i++) {
+    const __wasi_event_t* event = &events[i];
+    struct pollfd* pollfd;
+    if (event->type != __WASI_EVENTTYPE_FD_READ &&
+        event->type != __WASI_EVENTTYPE_FD_WRITE)
+      continue;
+    pollfd = (struct pollfd*)(uintptr_t)event->userdata;
+    if (event->error == __WASI_ERRNO_BADF) {
+      pollfd->revents |= POLLNVAL;
+    } else if (event->error == __WASI_ERRNO_PIPE) {
+      pollfd->revents |= POLLHUP;
+    } else if (event->error != 0) {
+      pollfd->revents |= POLLERR;
+    } else {
+      pollfd->revents |=
+          event->type == __WASI_EVENTTYPE_FD_READ ? POLLRDNORM : POLLWRNORM;
+      if (event->fd_readwrite.flags & __WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP)
+        pollfd->revents |= POLLHUP;
+    }
+  }
+
+  count = 0;
+  for (i = 0; i < nfds; i++) {
+    if (fds[i].revents & POLLHUP) fds[i].revents &= ~POLLWRNORM;
+    if (fds[i].revents != 0) count++;
+  }
+  return count;
+}
+
+static int uv__wasi_poll(struct pollfd* fds, nfds_t nfds, int timeout) {
+  int ready;
+  if (timeout == 0 || uv__wasi_can_suspend == NULL || !uv__wasi_can_suspend())
+    return poll(fds, nfds, timeout);
+  /* What is ready already needs no wait (and no trip through the host). */
+  ready = poll(fds, nfds, 0);
+  if (ready != 0) return ready;
+  return uv__wasi_poll_suspending(fds, nfds, timeout);
+}
+#endif
+
 /* Allocate or dynamically resize our poll fds array.  */
 static void uv__pollfds_maybe_resize(uv_loop_t* loop) {
   size_t i;
@@ -202,7 +305,11 @@ void uv__io_poll(uv_loop_t* loop, int timeout) {
    */
   for (;;) {
     uv__io_poll_prepare(loop, pset, timeout);
+#if defined(__wasi__)
+    nfds = uv__wasi_poll(loop->poll_fds, (nfds_t)loop->poll_fds_used, timeout);
+#else
     nfds = poll(loop->poll_fds, (nfds_t)loop->poll_fds_used, timeout);
+#endif
     uv__io_poll_check(loop, pset);
 
     if (nfds == 0) {
