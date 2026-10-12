@@ -70,13 +70,6 @@ class MicrotaskQueue final : public v8::MicrotaskQueue {
                                    reinterpret_cast<uintptr_t>(data), 0);
   }
 
-  void EnqueueMicrotask(v8::Isolate* isolate,
-                        MicrotaskCallbackWithData callback,
-                        Local<Data> data) override {
-    host::microtask_enqueue_native(reinterpret_cast<uintptr_t>(callback), 0,
-                                   Utils::Open(data));
-  }
-
   void AddMicrotasksCompletedCallback(
       MicrotasksCompletedCallbackWithData callback, void* data) override {
     completed_.push_back({callback, data});
@@ -107,8 +100,6 @@ class MicrotaskQueue final : public v8::MicrotaskQueue {
 
   int GetMicrotasksScopeDepth() const override { return 0; }
 
-  const char* GetHumanReadableName() const override { return "MicrotaskQueue"; }
-
  private:
   struct Completed {
     MicrotasksCompletedCallbackWithData callback;
@@ -122,17 +113,13 @@ class MicrotaskQueue final : public v8::MicrotaskQueue {
 
 namespace {
 
-// MicrotaskQueue is GarbageCollected, which forbids `new`. Queues live for
-// the whole program.
-internal::MicrotaskQueue* NewQueue() {
-  void* memory = malloc(sizeof(internal::MicrotaskQueue));
-  return ::new (memory) internal::MicrotaskQueue();
-}
+internal::MicrotaskQueue* NewQueue() { return new internal::MicrotaskQueue(); }
 
 }  // namespace
 
-MicrotaskQueue* MicrotaskQueue::New(Isolate* isolate, MicrotasksPolicy policy) {
-  return NewQueue();
+std::unique_ptr<MicrotaskQueue> MicrotaskQueue::New(Isolate* isolate,
+                                                    MicrotasksPolicy policy) {
+  return std::unique_ptr<MicrotaskQueue>(NewQueue());
 }
 
 namespace {
@@ -144,15 +131,11 @@ MicrotaskQueue* DefaultMicrotaskQueue() {
 
 }  // namespace
 
-// Native microtasks the host runs: callback(data) or callback(Local<Data>).
+// Native microtasks the host runs: callback(data).
 extern "C" __attribute__((export_name("v8shim_run_microtask"))) void
 v8shim_run_microtask(uintptr_t callback, uintptr_t data, Address value) {
   HandleScope scope(shim::TheIsolate());
-  if (value == 0)
-    reinterpret_cast<MicrotaskCallback>(callback)(reinterpret_cast<void*>(data));
-  else
-    reinterpret_cast<MicrotaskCallbackWithData>(callback)(
-        Utils::ToLocal<Data>(value));
+  reinterpret_cast<MicrotaskCallback>(callback)(reinterpret_cast<void*>(data));
 }
 
 void Isolate::PerformMicrotaskCheckpoint() {
@@ -240,8 +223,8 @@ void Context::SetAlignedPointerInEmbedderData(int index, void* value,
   data.pointers[index] = value;
 }
 
-void* Context::GetAlignedPointerFromEmbedderData(int index,
-                                                 EmbedderDataTypeTag tag) {
+void* Context::SlowGetAlignedPointerFromEmbedderData(int index,
+                                                     EmbedderDataTypeTag tag) {
   ContextData& data = DataOf(this);
   if (static_cast<size_t>(index) >= data.pointers.size()) return nullptr;
   return data.pointers[index];

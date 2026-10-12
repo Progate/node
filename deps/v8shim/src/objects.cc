@@ -163,12 +163,12 @@ MaybeLocal<Array> Object::GetPropertyNames(Local<Context> context,
       static_cast<int32_t>(index_filter), static_cast<int32_t>(key_conversion)));
 }
 
-Local<Value> Object::GetPrototype() {
+Local<Value> Object::GetPrototypeV2() {
   return Utils::ToLocal<Value>(host::object_get_prototype(Self(this)));
 }
 
-Maybe<bool> Object::SetPrototype(Local<Context> context,
-                                 Local<Value> prototype) {
+Maybe<bool> Object::SetPrototypeV2(Local<Context> context,
+                                   Local<Value> prototype) {
   return ToMaybeBool(
       host::object_set_prototype(Self(this), Utils::Open(prototype)));
 }

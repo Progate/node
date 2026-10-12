@@ -336,12 +336,19 @@ String::ExternalStringResource* String::GetExternalStringResourceSlow() const {
 }
 
 const String::ExternalOneByteStringResource*
-String::GetExternalOneByteStringResourceSlow() const {
+String::GetExternalOneByteStringResource() const {
   return nullptr;
 }
 
-void String::VerifyExternalStringResourceBase(
-    const ExternalStringResourceBase* v, Encoding encoding) const {}
+String::ExternalStringResourceBase* String::GetExternalStringResourceBaseSlow(
+    String::Encoding* encoding_out) const {
+  return nullptr;
+}
+
+void String::VerifyExternalStringResourceBase(ExternalStringResourceBase* v,
+                                              Encoding encoding) const {}
+
+void String::VerifyExternalStringResource(ExternalStringResource* val) const {}
 
 int String::Length() const {
   return static_cast<int>(host::string_length(Self(this)));
@@ -351,24 +358,26 @@ bool String::IsOneByte() const { return host::string_is_one_byte(Self(this)) != 
 
 bool String::ContainsOnlyOneByte() const { return IsOneByte(); }
 
-size_t String::Utf8Length(Isolate* isolate) const {
+size_t String::Utf8LengthV2(Isolate* isolate) const {
   return host::string_utf8_length(Self(this));
 }
 
-void String::Write(Isolate* isolate, uint32_t offset, uint32_t length,
-                   uint16_t* buffer, int flags) const {
+void String::WriteV2(Isolate* isolate, uint32_t offset, uint32_t length,
+                     uint16_t* buffer, int flags) const {
   host::string_write(Self(this), host::kUtf16, offset, length, buffer);
   if (flags & WriteFlags::kNullTerminate) buffer[length] = 0;
 }
 
-void String::WriteOneByte(Isolate* isolate, uint32_t offset, uint32_t length,
-                          uint8_t* buffer, int flags) const {
+void String::WriteOneByteV2(Isolate* isolate, uint32_t offset,
+                            uint32_t length, uint8_t* buffer,
+                            int flags) const {
   host::string_write(Self(this), host::kLatin1, offset, length, buffer);
   if (flags & WriteFlags::kNullTerminate) buffer[length] = 0;
 }
 
-size_t String::WriteUtf8(Isolate* isolate, char* buffer, size_t capacity,
-                         int flags, size_t* processed_characters_return) const {
+size_t String::WriteUtf8V2(Isolate* isolate, char* buffer, size_t capacity,
+                           int flags,
+                           size_t* processed_characters_return) const {
   uint32_t processed = 0;
   bool terminate = (flags & WriteFlags::kNullTerminate) != 0;
   size_t room = terminate ? (capacity > 0 ? capacity - 1 : 0) : capacity;

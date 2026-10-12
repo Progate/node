@@ -66,12 +66,12 @@ Maybe<bool> Module::InstantiateModule(
   return Just(true);
 }
 
-MaybeLocal<Promise> Module::Evaluate(Local<Context> context) {
-  return Utils::ToMaybeLocal<Promise>(
+MaybeLocal<Value> Module::Evaluate(Local<Context> context) {
+  return Utils::ToMaybeLocal<Value>(
       host::module_evaluate(Utils::Open(context), Self(this)));
 }
 
-Local<Value> Module::GetModuleNamespace(ModuleImportPhase phase) {
+Local<Value> Module::GetModuleNamespace() {
   return Utils::ToLocal<Value>(host::module_namespace(Self(this)));
 }
 
@@ -108,9 +108,8 @@ Module::GetStalledTopLevelAwaitMessages(Isolate* isolate) {
 
 Local<Module> Module::CreateSyntheticModule(
     Isolate* isolate, Local<String> module_name,
-    const std::span<const Local<String>>& export_names,
-    SyntheticModuleEvaluationSteps evaluation_steps,
-    Local<Data> host_defined_options) {
+    const MemorySpan<const Local<String>>& export_names,
+    SyntheticModuleEvaluationSteps evaluation_steps) {
   std::vector<Address> names;
   names.reserve(export_names.size());
   for (Local<String> name : export_names) names.push_back(Utils::Open(name));
@@ -119,18 +118,6 @@ Local<Module> Module::CreateSyntheticModule(
   return Utils::ToLocal<Module>(host::module_synthetic_new(
       Utils::Open(module_name), array,
       reinterpret_cast<uintptr_t>(evaluation_steps)));
-}
-
-// The older steps return any value; the host treats the result the same way.
-Local<Module> Module::CreateSyntheticModule(
-    Isolate* isolate, Local<String> module_name,
-    const std::span<const Local<String>>& export_names,
-    LegacySyntheticModuleEvaluationSteps evaluation_steps,
-    Local<Data> host_defined_options) {
-  return CreateSyntheticModule(
-      isolate, module_name, export_names,
-      reinterpret_cast<SyntheticModuleEvaluationSteps>(evaluation_steps),
-      host_defined_options);
 }
 
 Maybe<bool> Module::SetSyntheticModuleExport(Isolate* isolate,

@@ -140,6 +140,7 @@ v8shim_call_property(PropertyCall call, void* callback, Address callback_info,
   const auto& value_info = *reinterpret_cast<PropertyCallbackInfo<Value>*>(args);
   const auto& boolean_info =
       *reinterpret_cast<PropertyCallbackInfo<Boolean>*>(args);
+  const auto& void_info = *reinterpret_cast<PropertyCallbackInfo<void>*>(args);
   const auto& integer_info =
       *reinterpret_cast<PropertyCallbackInfo<Integer>*>(args);
   const auto& array_info = *reinterpret_cast<PropertyCallbackInfo<Array>*>(args);
@@ -149,16 +150,16 @@ v8shim_call_property(PropertyCall call, void* callback, Address callback_info,
       reinterpret_cast<AccessorNameGetterCallback>(callback)(name, value_info);
       break;
     case kAccessorSetter:
-      reinterpret_cast<AccessorNameSetterCallbackV2>(callback)(name, new_value,
-                                                                boolean_info);
+      reinterpret_cast<AccessorNameSetterCallback>(callback)(name, new_value,
+                                                              void_info);
       break;
     case kNamedGetter:
       intercepted =
           reinterpret_cast<NamedPropertyGetterCallback>(callback)(name, value_info);
       break;
     case kNamedSetter:
-      intercepted = reinterpret_cast<NamedPropertySetterCallbackV2>(callback)(
-          name, new_value, boolean_info);
+      intercepted = reinterpret_cast<NamedPropertySetterCallback>(callback)(
+          name, new_value, void_info);
       break;
     case kNamedQuery:
       intercepted =
@@ -177,23 +178,23 @@ v8shim_call_property(PropertyCall call, void* callback, Address callback_info,
           name, value_info);
       break;
     case kIndexedGetter:
-      intercepted = reinterpret_cast<IndexedPropertyGetterCallback>(callback)(
+      intercepted = reinterpret_cast<IndexedPropertyGetterCallbackV2>(callback)(
           index, value_info);
       break;
     case kIndexedSetter:
-      intercepted = reinterpret_cast<IndexedPropertySetterCallback>(callback)(
-          index, new_value, boolean_info);
+      intercepted = reinterpret_cast<IndexedPropertySetterCallbackV2>(callback)(
+          index, new_value, void_info);
       break;
     case kIndexedQuery:
-      intercepted = reinterpret_cast<IndexedPropertyQueryCallback>(callback)(
+      intercepted = reinterpret_cast<IndexedPropertyQueryCallbackV2>(callback)(
           index, integer_info);
       break;
     case kIndexedDeleter:
-      intercepted = reinterpret_cast<IndexedPropertyDeleterCallback>(callback)(
+      intercepted = reinterpret_cast<IndexedPropertyDeleterCallbackV2>(callback)(
           index, boolean_info);
       break;
     case kIndexedDescriptor:
-      intercepted = reinterpret_cast<IndexedPropertyDescriptorCallback>(
+      intercepted = reinterpret_cast<IndexedPropertyDescriptorCallbackV2>(
           callback)(index, value_info);
       break;
   }
@@ -341,7 +342,7 @@ void Template::SetAccessorProperty(Local<Name> name,
 
 void Template::SetNativeDataProperty(Local<Name> name,
                                      AccessorNameGetterCallback getter,
-                                     AccessorNameSetterCallbackV2 setter,
+                                     AccessorNameSetterCallback setter,
                                      Local<Value> data,
                                      PropertyAttribute attribute,
                                      SideEffectType getter_side_effect_type,
@@ -365,7 +366,7 @@ void Template::SetLazyDataProperty(Local<Name> name,
 // The same on an object, without a template.
 Maybe<bool> Object::SetNativeDataProperty(
     Local<Context> context, Local<Name> name, AccessorNameGetterCallback getter,
-    AccessorNameSetterCallbackV2 setter, Local<Value> data,
+    AccessorNameSetterCallback setter, Local<Value> data,
     PropertyAttribute attributes, SideEffectType getter_side_effect_type,
     SideEffectType setter_side_effect_type) {
   host::object_set_native_property(
@@ -402,7 +403,7 @@ MaybeLocal<Function> Function::New(Local<Context> context,
 // with the values that are given.
 
 Local<DictionaryTemplate> DictionaryTemplate::New(
-    Isolate* isolate, std::span<const std::string_view> names) {
+    Isolate* isolate, MemorySpan<const std::string_view> names) {
   std::vector<Address> keys;
   keys.reserve(names.size());
   for (std::string_view name : names)
@@ -413,7 +414,7 @@ Local<DictionaryTemplate> DictionaryTemplate::New(
 }
 
 Local<Object> DictionaryTemplate::NewInstance(
-    Local<Context> context, std::span<MaybeLocal<Value>> property_values) {
+    Local<Context> context, MemorySpan<MaybeLocal<Value>> property_values) {
   Address names = Utils::Open(this);
   Address object = host::object_new(0);
   for (size_t i = 0; i < property_values.size(); i++) {

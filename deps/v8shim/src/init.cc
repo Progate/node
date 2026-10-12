@@ -189,13 +189,45 @@ void Visitor::CheckObjectNotInConstruction(const void* address) {}
 
 namespace internal {
 
+namespace {
+
+// The object's header sits in front of the payload, as in cppgc:
+// MarkObjectAsFullyConstructed() sets a bit
+// kFullyConstructedBitFieldOffsetFromPayload bytes before it.
+constexpr size_t kHeaderSize = api_constants::kMaxSupportedAlignment;
+
+void* AllocateObject(size_t size) {
+  char* memory = static_cast<char*>(calloc(1, kHeaderSize + size));
+  if (memory == nullptr) v8::shim::Fatal("cppgc: out of memory (%zu)", size);
+  return memory + kHeaderSize;
+}
+
+}  // namespace
+
+void* MakeGarbageCollectedTraitInternal::Allocate(AllocationHandle& handle,
+                                                  size_t size,
+                                                  GCInfoIndex index) {
+  return AllocateObject(size);
+}
+
+void* MakeGarbageCollectedTraitInternal::Allocate(AllocationHandle& handle,
+                                                  size_t size, AlignVal,
+                                                  GCInfoIndex index) {
+  return AllocateObject(size);
+}
+
 void* MakeGarbageCollectedTraitInternal::Allocate(AllocationHandle& handle,
                                                   size_t size,
                                                   GCInfoIndex index,
-                                                  MixinTag) {
-  void* memory = calloc(1, size);
-  if (memory == nullptr) v8::shim::Fatal("cppgc: out of memory (%zu)", size);
-  return memory;
+                                                  CustomSpaceIndex) {
+  return AllocateObject(size);
+}
+
+void* MakeGarbageCollectedTraitInternal::Allocate(AllocationHandle& handle,
+                                                  size_t size, AlignVal,
+                                                  GCInfoIndex index,
+                                                  CustomSpaceIndex) {
+  return AllocateObject(size);
 }
 
 std::atomic<GCInfoIndex> next_gc_info_index{1};
