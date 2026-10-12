@@ -54,6 +54,18 @@ static void uv__cancelled(struct uv__work* w) {
 /* To avoid deadlock with uv_cancel() it's crucial that the worker
  * never holds the global mutex and the loop-local mutex at the same time.
  */
+#ifdef __wasi__
+/* Work posted and not yet finished running. The host (v8shim) mirrors
+ * ArrayBuffers between JavaScript and wasm memory, and only has to watch for
+ * late writes into them while work may still write. */
+static _Atomic int uv__wasi_work_running;
+
+__attribute__((export_name("uv_wasi_work_running")))
+int uv_wasi_work_running(void) {
+  return uv__wasi_work_running;
+}
+#endif
+
 static void worker(void* arg) {
   struct uv__work* w;
   struct uv__queue* q;
@@ -121,6 +133,9 @@ static void worker(void* arg) {
 
     w = uv__queue_data(q, struct uv__work, wq);
     w->work(w);
+#ifdef __wasi__
+    uv__wasi_work_running -= 1;
+#endif
 
     uv_mutex_lock(&w->loop->wq_mutex);
     w->work = NULL;  /* Signal uv_cancel() that the work req is done
@@ -282,6 +297,9 @@ void uv__work_submit(uv_loop_t* loop,
   w->loop = loop;
   w->work = work;
   w->done = done;
+#ifdef __wasi__
+  uv__wasi_work_running += 1;
+#endif
   post(&w->wq, kind);
 }
 
@@ -305,6 +323,9 @@ static int uv__work_cancel(uv_loop_t* loop, uv_req_t* req, struct uv__work* w) {
 
   if (!cancelled)
     return UV_EBUSY;
+#ifdef __wasi__
+  uv__wasi_work_running -= 1;
+#endif
 
   w->work = uv__cancelled;
   uv_mutex_lock(&loop->wq_mutex);
