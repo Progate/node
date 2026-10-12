@@ -471,6 +471,24 @@ bool Worker::CreateEnvMessagePort(Environment* env) {
   return child_port;
 }
 
+#if defined(NODE_USE_V8SHIM)
+void Worker::Abandon() {
+  Mutex::ScopedLock lock(mutex_);
+  abandoned_ = true;
+}
+
+bool Worker::WaitForThreadExit(uint64_t timeout_ms) {
+  const uint64_t deadline = uv_hrtime() + timeout_ms * 1000 * 1000;
+  Mutex::ScopedLock lock(mutex_);
+  while (!thread_finished_) {
+    const uint64_t now = uv_hrtime();
+    if (now >= deadline) return false;
+    thread_finished_cv_.TimedWait(lock, deadline - now);
+  }
+  return true;
+}
+#endif
+
 void Worker::JoinThread() {
   if (!tid_.has_value())
     return;
@@ -514,6 +532,10 @@ void Worker::JoinThread() {
 Worker::~Worker() {
   Mutex::ScopedLock lock(mutex_);
 
+#if defined(NODE_USE_V8SHIM)
+  // The thread is still blocked in Atomics.wait (see Abandon()).
+  if (abandoned_) return;
+#endif
   CHECK(stopped_);
   CHECK_NULL(env_);
   CHECK(!tid_.has_value());
@@ -793,6 +815,10 @@ void Worker::StartThread(const FunctionCallbackInfo<Value>& args) {
     w->Run();
 
     Mutex::ScopedLock lock(w->mutex_);
+#if defined(NODE_USE_V8SHIM)
+    w->thread_finished_ = true;
+    w->thread_finished_cv_.Broadcast(lock);
+#endif
     w->env()->SetImmediateThreadsafe(
         [w = std::unique_ptr<Worker>(w)](Environment* env) {
           if (w->has_ref_)

@@ -136,6 +136,24 @@ class Worker : public AsyncWrap {
   // async handle of the worker's Environment for the same purpose.
   bool stopped_ = true;
 
+#if defined(NODE_USE_V8SHIM)
+  // browser-v8: whether the thread function has returned, so the parent can
+  // wait for it with a deadline (see WaitForThreadExit).
+  bool thread_finished_ = false;
+  ConditionVariable thread_finished_cv_;
+
+ public:
+  // Waits up to `timeout_ms` for the thread to return. A Worker blocked in
+  // Atomics.wait / memory.atomic.wait (the wasm thread pools of napi-rs
+  // bindings) cannot be woken by TerminateExecution there.
+  bool WaitForThreadExit(uint64_t timeout_ms);
+  // Gives up on a thread that did not return: the process exit takes it along.
+  void Abandon();
+
+ private:
+  bool abandoned_ = false;
+#endif
+
   bool has_ref_ = true;
   uint64_t environment_flags_ = EnvironmentFlags::kNoFlags;
 

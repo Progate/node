@@ -2150,6 +2150,14 @@ void Environment::stop_sub_worker_contexts() {
     Worker* w = *sub_worker_contexts_.begin();
     remove_sub_worker_context(w);
     w->Exit(ExitCode::kGenericUserError);
+#if defined(NODE_USE_V8SHIM)
+    // browser-v8: a Worker blocked in Atomics.wait cannot be terminated; leave
+    // it, the process exit takes its thread along.
+    if (!w->WaitForThreadExit(500)) {
+      w->Abandon();
+      continue;
+    }
+#endif
     w->JoinThread();
   }
 }
