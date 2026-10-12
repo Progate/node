@@ -484,7 +484,10 @@ Local<Value> TryCatch::ReThrow() {
 Local<Value> TryCatch::Exception() const {
   TakePending(const_cast<TryCatch*>(this)->exception_);
   Address caught = Caught(exception_);
-  return caught ? Utils::ToLocal<Value>(caught) : Local<Value>();
+  // A local in the current scope, as in V8: node keeps using it after the
+  // TryCatch is gone, and the TryCatch disposes of its own entry.
+  return caught ? Utils::ToLocal<Value>(host::scope_push(caught))
+                : Local<Value>();
 }
 
 Local<v8::Message> TryCatch::Message() const {
