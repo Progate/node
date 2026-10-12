@@ -68,6 +68,7 @@ using v8::Integer;
 using v8::Isolate;
 using v8::Local;
 using v8::Object;
+using v8::Global;
 using v8::Uint32Array;
 using v8::Value;
 
@@ -619,6 +620,17 @@ class CompressionStream : public AsyncWrap,
   }
 
   void UpdateWriteResult() {
+#if defined(NODE_USE_V8SHIM)
+    // browser-v8: the array's contents live in the host JavaScript engine and
+    // reach wasm memory only while C++ is handed them. Ask for them again so
+    // that this write is seen by JavaScript.
+    if (!write_result_array_.IsEmpty()) {
+      Local<Uint32Array> array =
+          write_result_array_.Get(AsyncWrap::env()->isolate());
+      write_result_ = reinterpret_cast<uint32_t*>(
+          static_cast<char*>(array->Buffer()->Data()) + array->ByteOffset());
+    }
+#endif
     ctx_.GetAfterWriteOffsets(&write_result_[1], &write_result_[0]);
   }
 
@@ -730,8 +742,13 @@ class CompressionStream : public AsyncWrap,
  protected:
   CompressionContext* context() { return &ctx_; }
 
-  void InitStream(uint32_t* write_result, Local<Function> write_js_callback) {
+  void InitStream(uint32_t* write_result,
+                  Local<Function> write_js_callback,
+                  Local<Uint32Array> write_result_array) {
     write_result_ = write_result;
+#if defined(NODE_USE_V8SHIM)
+    write_result_array_.Reset(AsyncWrap::env()->isolate(), write_result_array);
+#endif
     object()->SetInternalField(kWriteJSCallback, write_js_callback);
     init_done_ = true;
   }
@@ -771,6 +788,9 @@ class CompressionStream : public AsyncWrap,
   bool closed_ = false;
   unsigned int refs_ = 0;
   uint32_t* write_result_ = nullptr;
+#if defined(NODE_USE_V8SHIM)
+  Global<Uint32Array> write_result_array_;
+#endif
 
   CompressionContext ctx_;
 };
@@ -850,7 +870,7 @@ class ZlibStream final : public CompressionStream<ZlibContext> {
       reject_garbage_after_end = args[7]->IsTrue();
     }
 
-    wrap->InitStream(write_result, write_js_callback);
+    wrap->InitStream(write_result, write_js_callback, array);
 
     AllocScope alloc_scope(wrap);
     wrap->context()->Init(level,
@@ -916,7 +936,8 @@ class BrotliCompressionStream final :
 
     CHECK(args[2]->IsFunction());
     Local<Function> write_js_callback = args[2].As<Function>();
-    wrap->InitStream(write_result, write_js_callback);
+    wrap->InitStream(
+        write_result, write_js_callback, args[1].As<Uint32Array>());
 
     AllocScope alloc_scope(wrap);
     std::vector<uint8_t> dictionary;
@@ -1002,7 +1023,8 @@ class ZstdStream final : public CompressionStream<CompressionContext> {
 
     CHECK(args[3]->IsFunction());
     Local<Function> write_js_callback = args[3].As<Function>();
-    wrap->InitStream(write_result, write_js_callback);
+    wrap->InitStream(
+        write_result, write_js_callback, args[2].As<Uint32Array>());
 
     uint64_t pledged_src_size = ZSTD_CONTENTSIZE_UNKNOWN;
     if (!args[1]->IsUndefined()) {
