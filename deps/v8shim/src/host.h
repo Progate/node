@@ -380,12 +380,22 @@ enum ViewKind : int32_t {
 V8SHIM_IMPORT(array_buffer_new) Address array_buffer_new(void* holder, uintptr_t data, uint32_t length, int32_t shared, int32_t aliased);
 // The buffer's mirror (made if needed), brought up to date with the buffer.
 V8SHIM_IMPORT(array_buffer_pin) uintptr_t array_buffer_pin(Address buffer);
+// WebAssembly.Memory#buffer.
+V8SHIM_IMPORT(wasm_memory_buffer) Address wasm_memory_buffer(Address memory);
 // SharedArrayBuffers shared between isolates (node's worker_threads). Each
 // isolate runs in its own host engine, so the host passes the object itself
 // between them; a backing store from shared_buffer_token stands for it by its
 // data address and carries no copy of the contents.
 // The token's holder (std::shared_ptr<BackingStore>*) for the buffer.
 V8SHIM_IMPORT(shared_buffer_token) uintptr_t shared_buffer_token(Address buffer);
+// The same for any object the hosts pass between isolates by serial number
+// (a WebAssembly.Module): the object's serial (passing it on to the other
+// threads), whether this host has it, waiting for it, and the object (0 when
+// it did not arrive).
+V8SHIM_IMPORT(shared_object_serial) uint32_t shared_object_serial(Address value);
+V8SHIM_IMPORT(shared_object_has) int32_t shared_object_has(uint32_t serial);
+V8SHIM_IMPORT(shared_object_wait) int32_t shared_object_wait(uint32_t serial);
+V8SHIM_IMPORT(shared_object_get) Address shared_object_get(uint32_t serial);
 // Whether this isolate's host has the buffer the token stands for.
 V8SHIM_IMPORT(shared_buffer_has) int32_t shared_buffer_has(uintptr_t data);
 // Waits until it has: the buffer is on its way from the isolate that made the

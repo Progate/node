@@ -205,6 +205,21 @@ v8shim_serializer_shared_id(ValueSerializer::Delegate* delegate, Address buffer)
   return id.IsJust() ? static_cast<double>(id.FromJust()) : -1;
 }
 
+// The transfer id of a WebAssembly.Module, or -1 with the exception pending.
+extern "C" __attribute__((export_name("v8shim_serializer_wasm_id"))) double
+v8shim_serializer_wasm_id(ValueSerializer::Delegate* delegate, Address module) {
+  Isolate* isolate = shim::TheIsolate();
+  HandleScope scope(isolate);
+  Maybe<uint32_t> id = delegate->GetWasmModuleTransferId(
+      isolate, Utils::ToLocal<WasmModuleObject>(module));
+  if (id.IsNothing()) {
+    if (!isolate->HasPendingException())
+      ThrowError("#<Module> could not be cloned.");
+    return -1;
+  }
+  return static_cast<double>(id.FromJust());
+}
+
 // --- ValueDeserializer ------------------------------------------------------------
 
 struct ValueDeserializer::PrivateData {
@@ -319,6 +334,20 @@ Address v8shim_deserializer_read_host_object(ValueDeserializer::Delegate* delega
   Local<Object> object;
   if (!delegate->ReadHostObject(isolate).ToLocal(&object)) return 0;
   return Keep(Utils::Open(object));
+}
+
+extern "C" __attribute__((export_name("v8shim_deserializer_wasm")))
+Address v8shim_deserializer_wasm(ValueDeserializer::Delegate* delegate,
+                                 uint32_t id) {
+  Isolate* isolate = shim::TheIsolate();
+  HandleScope scope(isolate);
+  if (delegate == nullptr) {
+    ThrowError("Unable to deserialize cloned data.");
+    return 0;
+  }
+  Local<WasmModuleObject> module;
+  if (!delegate->GetWasmModuleFromId(isolate, id).ToLocal(&module)) return 0;
+  return Keep(Utils::Open(module));
 }
 
 extern "C" __attribute__((export_name("v8shim_deserializer_shared")))

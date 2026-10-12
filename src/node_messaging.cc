@@ -198,6 +198,14 @@ MaybeLocal<Value> Message::Deserialize(Environment* env,
     shared_array_buffers.push_back(sab);
   }
 
+#if defined(NODE_USE_V8SHIM)
+  // browser-v8: a module's object may still be on its way from the isolate
+  // that sent it. Wait for it here, where the thread can (no JavaScript is
+  // running); the delegate makes it while the value is read.
+  for (const CompiledWasmModule& module : wasm_modules_)
+    USE(WasmModuleObject::FromCompiledModule(env->isolate(), module));
+#endif
+
   DeserializerDelegate delegate(this,
                                 env,
                                 host_objects,

@@ -120,6 +120,22 @@ v8shim_store_new(uint32_t length, int32_t shared) {
       NewStore(data, length, shared != 0, FreeWithLibc, nullptr)));
 }
 
+// Memory the host stages a guest's WASI call in (src/v8shim/guest-wasi.ts in
+// @progate/browser-v8): the call goes to this program's own syscalls, whose
+// pointers are into this memory. One per thread, grown as needed.
+extern "C" __attribute__((export_name("v8shim_scratch"))) void* v8shim_scratch(
+    uint32_t size) {
+  static thread_local void* scratch = nullptr;
+  static thread_local uint32_t capacity = 0;
+  if (size > capacity) {
+    void* grown = realloc(scratch, size);
+    if (grown == nullptr) shim::Fatal("out of memory for a WASI call (%u)", size);
+    scratch = grown;
+    capacity = size;
+  }
+  return scratch;
+}
+
 // What the hosts of this program's threads share about SharedArrayBuffers:
 // the name of the channel they pass them on (a number the first of them
 // picks) and the last serial number of a token. The same for every thread

@@ -373,7 +373,10 @@ uvwasi_errno_t uvwasi_init(uvwasi_t* uvwasi, const uvwasi_options_t* options) {
       goto exit;
     }
 
-    r = uv_fs_open(NULL, &open_req, realpath_req.ptr, 0, 0666, NULL);
+    /* O_RDONLY is not 0 everywhere (it is not in wasi-libc), and 0 asks for
+     * neither reading nor writing there. */
+    r = uv_fs_open(NULL, &open_req, realpath_req.ptr, UV_FS_O_RDONLY, 0666,
+                   NULL);
     if (r < 0) {
       err = uvwasi__translate_uv_error(r);
       uv_fs_req_cleanup(&realpath_req);
