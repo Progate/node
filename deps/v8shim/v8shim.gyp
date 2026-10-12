@@ -22,6 +22,7 @@
         'src/values.cc',
         'src/objects.cc',
         'src/profiler.cc',
+        'src/serializer.cc',
         'src/templates.cc',
         'src/execution.cc',
         'src/wasi.c',

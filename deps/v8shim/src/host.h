@@ -390,6 +390,42 @@ V8SHIM_IMPORT(view_number) uint32_t view_number(Address view, ViewNumber which);
 V8SHIM_IMPORT(view_copy) uint32_t view_copy(Address view, void* destination, uint32_t length);
 V8SHIM_IMPORT(typed_array_new) Address typed_array_new(ViewKind kind, Address buffer, uint32_t byte_offset, uint32_t length);
 
+// --- ValueSerializer / ValueDeserializer -----------------------------------------
+// The host writes and reads V8's wire format. It passes `delegate` back to
+// v8shim_serializer_* / v8shim_deserializer_* for host objects and
+// SharedArrayBuffer ids.
+V8SHIM_IMPORT(serializer_new) int32_t serializer_new(void* delegate);
+V8SHIM_IMPORT(serializer_delete) void serializer_delete(int32_t id);
+V8SHIM_IMPORT(serializer_write_header) void serializer_write_header(int32_t id);
+// 1 when written, 0 with the exception pending, -1 when the value cannot be
+// cloned (serializer_error has the message for the delegate).
+V8SHIM_IMPORT(serializer_write_value) int32_t serializer_write_value(int32_t id, Address value);
+V8SHIM_IMPORT(serializer_error) Address serializer_error(int32_t id);
+V8SHIM_IMPORT(serializer_size) uint32_t serializer_size(int32_t id);
+// Copies the bytes to `destination` (serializer_size of them) and starts over.
+V8SHIM_IMPORT(serializer_release) void serializer_release(int32_t id, void* destination);
+V8SHIM_IMPORT(serializer_transfer) void serializer_transfer(int32_t id, uint32_t transfer_id, Address buffer);
+V8SHIM_IMPORT(serializer_treat_views) void serializer_treat_views(int32_t id, int32_t mode);
+V8SHIM_IMPORT(serializer_write_uint32) void serializer_write_uint32(int32_t id, uint32_t value);
+V8SHIM_IMPORT(serializer_write_uint64) void serializer_write_uint64(int32_t id, uint64_t value);
+V8SHIM_IMPORT(serializer_write_double) void serializer_write_double(int32_t id, double value);
+V8SHIM_IMPORT(serializer_write_raw) void serializer_write_raw(int32_t id, const void* source, uint32_t length);
+
+// The host keeps a copy of the bytes; read_raw gives an offset into them.
+V8SHIM_IMPORT(deserializer_new) int32_t deserializer_new(void* delegate, const void* data, uint32_t size);
+V8SHIM_IMPORT(deserializer_delete) void deserializer_delete(int32_t id);
+// 1, or 0 with the exception pending.
+V8SHIM_IMPORT(deserializer_read_header) int32_t deserializer_read_header(int32_t id);
+V8SHIM_IMPORT(deserializer_read_value) Address deserializer_read_value(int32_t id);
+V8SHIM_IMPORT(deserializer_transfer) void deserializer_transfer(int32_t id, uint32_t transfer_id, Address buffer);
+V8SHIM_IMPORT(deserializer_version) uint32_t deserializer_version(int32_t id);
+// 1 when read, 0 at the end of the data.
+V8SHIM_IMPORT(deserializer_read_uint32) int32_t deserializer_read_uint32(int32_t id, uint32_t* value);
+V8SHIM_IMPORT(deserializer_read_uint64) int32_t deserializer_read_uint64(int32_t id, uint64_t* value);
+V8SHIM_IMPORT(deserializer_read_double) int32_t deserializer_read_double(int32_t id, double* value);
+// The offset of `length` bytes, or -1 past the end.
+V8SHIM_IMPORT(deserializer_read_raw) int32_t deserializer_read_raw(int32_t id, uint32_t length);
+
 // --- Exceptions ---------------------------------------------------------------
 // One exception can be pending: a call that threw, or Isolate::ThrowException.
 // A callback returning to JavaScript throws it.
