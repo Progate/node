@@ -20,6 +20,34 @@ using v8::TryCatch;
 
 namespace node {
 
+#if defined(NODE_USE_V8SHIM)
+extern "C" int v8shim_wait_host_tasks(void);
+
+// The host engine runs microtasks only when no JS is on the stack, so when
+// uv_run() returns some may still be queued (a promise the host settled while
+// the loop was waiting, say). Run them and the ticks they schedule before
+// deciding that the loop is done, as V8 would have run them already. Returns
+// whether the loop has work again.
+static bool SettleHostWork(Environment* env) {
+  Isolate* isolate = env->isolate();
+  HandleScope handle_scope(isolate);
+  Local<Context> context = env->context();
+  TickInfo* tick_info = env->tick_info();
+  for (;;) {
+    context->GetMicrotaskQueue()->PerformCheckpoint(isolate);
+    if (env->is_stopping() || !env->can_call_into_js()) return false;
+    if (!tick_info->has_tick_scheduled() && !tick_info->has_rejection_to_warn())
+      break;
+    if (env->tick_callback_function()
+            ->Call(context, env->process_object(), 0, nullptr)
+            .IsEmpty())
+      return false;
+  }
+  if (uv_loop_alive(env->event_loop())) return true;
+  return v8shim_wait_host_tasks() != 0;
+}
+#endif
+
 Maybe<ExitCode> SpinEventLoopInternal(Environment* env) {
   CHECK_NOT_NULL(env);
   MultiIsolatePlatform* platform = GetMultiIsolatePlatform(env);
@@ -46,6 +74,15 @@ Maybe<ExitCode> SpinEventLoopInternal(Environment* env) {
 
       more = uv_loop_alive(env->event_loop());
       if (more && !env->is_stopping()) continue;
+#if defined(NODE_USE_V8SHIM)
+      // Queued host microtasks first, then the host's pending work (an async
+      // WebAssembly compile, an import()): DrainTasks waits for V8's own.
+      // (`continue` in this do-while checks `more`.)
+      if (SettleHostWork(env) && !env->is_stopping()) {
+        more = true;
+        continue;
+      }
+#endif
 
       if (EmitProcessBeforeExit(env).IsNothing())
         break;

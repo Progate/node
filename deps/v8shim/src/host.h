@@ -416,6 +416,11 @@ V8SHIM_IMPORT(shared_buffer_has) int32_t shared_buffer_has(uintptr_t data);
 // Waits until it has: the buffer is on its way from the isolate that made the
 // token. Suspends the thread (JSPI), so only when microtask_can_suspend().
 V8SHIM_IMPORT(shared_buffer_wait) int32_t shared_buffer_wait(uintptr_t data);
+// Work the host engine does for the guest that has not settled
+// (WebAssembly.compile / instantiate): V8 keeps the process alive for its
+// background compile tasks. host_tasks_wait suspends (JSPI) until one settles.
+V8SHIM_IMPORT(host_tasks_pending) int32_t host_tasks_pending();
+V8SHIM_IMPORT(host_tasks_wait) int32_t host_tasks_wait();
 V8SHIM_IMPORT(array_buffer_length) uint32_t array_buffer_length(Address buffer);
 V8SHIM_IMPORT(array_buffer_was_detached) int32_t array_buffer_was_detached(Address buffer);
 V8SHIM_IMPORT(array_buffer_detach) void array_buffer_detach(Address buffer);

@@ -146,6 +146,16 @@ extern "C" int uv__wasi_can_suspend(void) {
   return host::microtask_can_suspend();
 }
 
+// node's SpinEventLoop asks this when the loop has nothing left: wait for the
+// host's pending work (an async WebAssembly compile, say) the way V8's
+// platform drains its background tasks. Returns whether it waited.
+extern "C" int v8shim_wait_host_tasks(void) {
+  if (host::host_tasks_pending() == 0 || !host::microtask_can_suspend())
+    return 0;
+  host::host_tasks_wait();
+  return 1;
+}
+
 void Isolate::PerformMicrotaskCheckpoint() {
   DefaultMicrotaskQueue()->PerformCheckpoint(this);
 }
