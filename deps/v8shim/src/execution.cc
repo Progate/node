@@ -297,7 +297,8 @@ MaybeLocal<Script> Script::Compile(Local<Context> context, Local<String> source,
 }
 
 MaybeLocal<Value> Script::Run(Local<Context> context) {
-  return Utils::ToMaybeLocal<Value>(host::script_run(Self(this)));
+  return Utils::ToMaybeLocal<Value>(
+      host::script_run(Self(this), Utils::Open(context)));
 }
 
 MaybeLocal<UnboundScript> ScriptCompiler::CompileUnboundScript(
@@ -339,7 +340,7 @@ MaybeLocal<Function> ScriptCompiler::CompileFunction(
       source->resource_line_offset, source->resource_column_offset,
       parameters.data(), static_cast<uint32_t>(arguments_count),
       extensions.data(), static_cast<uint32_t>(context_extension_count),
-      Utils::Open(source->host_defined_options)));
+      Utils::Open(source->host_defined_options), Utils::Open(context)));
 }
 
 // There is no bytecode to cache. A cache is empty, and is rejected when it

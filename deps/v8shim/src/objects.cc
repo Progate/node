@@ -102,18 +102,20 @@ Maybe<bool> Object::HasOwnProperty(Local<Context> context, Local<Name> key) {
 
 Maybe<bool> Object::HasRealNamedProperty(Local<Context> context,
                                          Local<Name> key) {
-  return ToMaybeBool(host::object_has(Self(this), Utils::Open(key)));
+  return ToMaybeBool(host::object_has_real(Self(this), Utils::Open(key)));
 }
 
 MaybeLocal<Value> Object::GetRealNamedProperty(Local<Context> context,
                                                Local<Name> key) {
-  return Get(context, key);
+  return Utils::ToMaybeLocal<Value>(
+      host::object_get_real(Self(this), Utils::Open(key)));
 }
 
 Maybe<PropertyAttribute> Object::GetRealNamedPropertyAttributes(
     Local<Context> context, Local<Name> key) {
+  // Without interceptors; nothing when the property is absent.
   int32_t attributes =
-      host::object_property_attributes(Self(this), Utils::Open(key), 1);
+      host::object_property_attributes(Self(this), Utils::Open(key), 2);
   if (attributes < 0) return Nothing<PropertyAttribute>();
   return Just(static_cast<PropertyAttribute>(attributes));
 }
@@ -124,6 +126,18 @@ Maybe<PropertyAttribute> Object::GetPropertyAttributes(Local<Context> context,
       host::object_property_attributes(Self(this), Utils::Open(key), 1);
   if (attributes < 0) return Nothing<PropertyAttribute>();
   return Just(static_cast<PropertyAttribute>(attributes));
+}
+
+Maybe<bool> Object::GetPropertyAttributes(Local<Context> context,
+                                          Local<Value> key,
+                                          PropertyAttribute* out_attributes) {
+  // Along the prototype chain; false when the property is absent.
+  int32_t attributes =
+      host::object_property_attributes(Self(this), Utils::Open(key), 3);
+  if (attributes == -2) return Just(false);
+  if (attributes < 0) return Nothing<bool>();
+  *out_attributes = static_cast<PropertyAttribute>(attributes);
+  return Just(true);
 }
 
 Maybe<bool> Object::CreateDataProperty(Local<Context> context, Local<Name> key,
@@ -189,6 +203,10 @@ bool Object::IsConstructor() const {
 
 // There is one context; everything was created in it.
 MaybeLocal<Context> Object::GetCreationContext() {
+  // The global of a vm context belongs to that context (node's contextify
+  // finds its sandbox through it); everything else to the current context.
+  Address context = host::object_creation_context(Self(this));
+  if (context != internal::kNullAddress) return Utils::ToLocal<Context>(context);
   return shim::TheIsolate()->GetCurrentContext();
 }
 

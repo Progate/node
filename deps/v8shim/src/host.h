@@ -198,6 +198,12 @@ enum CollectionKind : int32_t { kMap, kSet };
 // The prototype, or 0 for Object.prototype.
 V8SHIM_IMPORT(object_new) Address object_new(Address prototype);
 V8SHIM_IMPORT(object_get) Address object_get(Address object, Address key);
+// The context whose global `object` is (a vm context), or the null address.
+V8SHIM_IMPORT(object_creation_context) Address object_creation_context(Address object);
+// Own property, without interceptors (Object::HasRealNamedProperty).
+V8SHIM_IMPORT(object_has_real) int32_t object_has_real(Address object, Address key);
+// Without interceptors, along the prototype chain; the null address when absent.
+V8SHIM_IMPORT(object_get_real) Address object_get_real(Address object, Address key);
 V8SHIM_IMPORT(object_set) int32_t object_set(Address object, Address key, Address value);
 V8SHIM_IMPORT(object_has) int32_t object_has(Address object, Address key);
 V8SHIM_IMPORT(object_has_own) int32_t object_has_own(Address object, Address key);
@@ -295,10 +301,11 @@ V8SHIM_IMPORT(set_continuation_data) void set_continuation_data(Address data);
 // `host_defined_options` (0 for none) is what a dynamic import() in the code
 // passes back to v8shim_import_dynamic.
 V8SHIM_IMPORT(script_compile) Address script_compile(Address source, Address name, int32_t line_offset, int32_t column_offset, Address host_defined_options);
-V8SHIM_IMPORT(script_run) Address script_run(Address script);
+// Runs in `context` (the global of a vm context is its own; see the host).
+V8SHIM_IMPORT(script_run) Address script_run(Address script, Address context);
 // 0 the sourceURL, 1 the sourceMappingURL.
 V8SHIM_IMPORT(script_url) Address script_url(Address script, int32_t which);
-V8SHIM_IMPORT(compile_function) Address compile_function(Address source, Address name, int32_t line_offset, int32_t column_offset, const Address* parameters, uint32_t parameter_count, const Address* extensions, uint32_t extension_count, Address host_defined_options);
+V8SHIM_IMPORT(compile_function) Address compile_function(Address source, Address name, int32_t line_offset, int32_t column_offset, const Address* parameters, uint32_t parameter_count, const Address* extensions, uint32_t extension_count, Address host_defined_options, Address context);
 
 // --- Modules -------------------------------------------------------------------
 // A module is a host record: a source text module (compiled by the host into
