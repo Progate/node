@@ -109,6 +109,8 @@ enum WellKnownSymbol : int32_t {
   kSymbolSearch,
   kSymbolSplit,
   kSymbolIsConcatSpreadable,
+  kSymbolDispose,
+  kSymbolAsyncDispose,
 };
 
 extern "C" {
@@ -174,6 +176,8 @@ V8SHIM_IMPORT(string_concat) Address string_concat(Address left, Address right);
 V8SHIM_IMPORT(symbol_new) Address symbol_new(Address description);
 V8SHIM_IMPORT(symbol_description) Address symbol_description(Address symbol);
 V8SHIM_IMPORT(symbol_well_known) Address symbol_well_known(WellKnownSymbol which);
+// Symbol.for(description): the symbol registry shared by every context.
+V8SHIM_IMPORT(symbol_for) Address symbol_for(Address description);
 // for_api: the same name gives the same private.
 V8SHIM_IMPORT(private_new) Address private_new(Address name, int32_t for_api);
 V8SHIM_IMPORT(external_new) Address external_new(uintptr_t pointer);
@@ -247,6 +251,10 @@ V8SHIM_IMPORT(array_length) uint32_t array_length(Address array);
 V8SHIM_IMPORT(collection_new) Address collection_new(CollectionKind kind);
 // Map: set(key, value); Set: add(key). -1 if it threw.
 V8SHIM_IMPORT(collection_add) int32_t collection_add(Address collection, Address key, Address value);
+// Map.prototype.get; the null address when it threw.
+V8SHIM_IMPORT(map_get) Address map_get(Address map, Address key);
+// Map/Set.prototype.delete: 1 when it was there, 0 when not, -1 when it threw.
+V8SHIM_IMPORT(collection_delete) int32_t collection_delete(Address collection, Address key);
 V8SHIM_IMPORT(resolver_new) Address resolver_new();
 V8SHIM_IMPORT(resolver_promise) Address resolver_promise(Address resolver);
 V8SHIM_IMPORT(resolver_settle) void resolver_settle(Address resolver, Address value, int32_t reject);

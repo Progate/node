@@ -363,6 +363,16 @@ MaybeLocal<Map> Map::Set(Local<Context> context, Local<Value> key,
   return Utils::ToLocal<Map>(Self(this));
 }
 
+MaybeLocal<Value> Map::Get(Local<Context> context, Local<Value> key) {
+  return Utils::ToMaybeLocal<Value>(host::map_get(Self(this), Utils::Open(key)));
+}
+
+Maybe<bool> Map::Delete(Local<Context> context, Local<Value> key) {
+  int32_t deleted = host::collection_delete(Self(this), Utils::Open(key));
+  if (deleted < 0) return Nothing<bool>();
+  return Just(deleted != 0);
+}
+
 Local<v8::Set> v8::Set::New(Isolate* isolate) {
   return Utils::ToLocal<v8::Set>(host::collection_new(host::kSet));
 }

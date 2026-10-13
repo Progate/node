@@ -434,6 +434,19 @@ Local<Symbol> Symbol::GetIterator(Isolate* isolate) {
   return Utils::ToLocal<Symbol>(host::symbol_well_known(host::kSymbolIterator));
 }
 
+Local<Symbol> Symbol::For(Isolate* isolate, Local<String> description) {
+  return Utils::ToLocal<Symbol>(host::symbol_for(Utils::Open(description)));
+}
+
+Local<Symbol> Symbol::GetDispose(Isolate* isolate) {
+  return Utils::ToLocal<Symbol>(host::symbol_well_known(host::kSymbolDispose));
+}
+
+Local<Symbol> Symbol::GetAsyncDispose(Isolate* isolate) {
+  return Utils::ToLocal<Symbol>(
+      host::symbol_well_known(host::kSymbolAsyncDispose));
+}
+
 Local<Symbol> Symbol::GetToStringTag(Isolate* isolate) {
   return Utils::ToLocal<Symbol>(
       host::symbol_well_known(host::kSymbolToStringTag));

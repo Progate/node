@@ -3568,12 +3568,18 @@ void Database::LoadExtension(const FunctionCallbackInfo<Value>& args) {
   ToNamespacedPath(env, &path);
   THROW_IF_INSUFFICIENT_PERMISSIONS(
       env, permission::PermissionScope::kFileSystemRead, path.ToStringView());
+#if defined(SQLITE_OMIT_LOAD_EXTENSION)
+  // There is no dlopen to load an extension with (WASI).
+  isolate->ThrowException(ERR_LOAD_SQLITE_EXTENSION(
+      isolate, "loading extensions is not supported on this platform"));
+#else
   char* errmsg = nullptr;
   const int r = sqlite3_load_extension(
       db->connection_.get(), *path, *entryPoint, &errmsg);
   if (r != SQLITE_OK) {
     isolate->ThrowException(ERR_LOAD_SQLITE_EXTENSION(isolate, errmsg));
   }
+#endif
 }
 
 void Database::SetAuthorizer(const FunctionCallbackInfo<Value>& args) {
