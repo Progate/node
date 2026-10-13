@@ -84,6 +84,12 @@ static void InitConfig(Local<Object> target,
 
 #endif  // NODE_HAVE_I18N_SUPPORT
 
+#if defined(NODE_USE_V8SHIM)
+  // The host engine runs microtasks only when no JS is on the stack: the JS
+  // that runs timers and immediates hands back to C++ between callbacks.
+  READONLY_TRUE_PROPERTY(target, "isV8Shim");
+#endif
+
 #if HAVE_INSPECTOR
   READONLY_TRUE_PROPERTY(target, "hasInspector");
 #else

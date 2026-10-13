@@ -1744,6 +1744,26 @@ void Environment::ToggleTimerRef(bool ref) {
   }
 }
 
+#if defined(NODE_USE_V8SHIM)
+// The host engine runs microtasks only when no JS is on the stack, so the
+// runNextTicks() that the timers JS calls between timers does not run them.
+// The JS hands back instead, and they run here, with the ticks they schedule.
+static void RunTicksAndMicrotasks(Environment* env) {
+  TickInfo* tick_info = env->tick_info();
+  Local<Context> context = env->context();
+  for (;;) {
+    context->GetMicrotaskQueue()->PerformCheckpoint(env->isolate());
+    if (!env->can_call_into_js()) return;
+    if (!tick_info->has_tick_scheduled() && !tick_info->has_rejection_to_warn())
+      return;
+    if (env->tick_callback_function()
+            ->Call(context, env->process_object(), 0, nullptr)
+            .IsEmpty())
+      return;
+  }
+}
+#endif
+
 void Environment::RunTimers(uv_timer_t* handle) {
   Environment* env = Environment::from_timer_handle(handle);
   TRACE_EVENT0(TRACING_CATEGORY_NODE1(environment), "RunTimers");
@@ -1767,6 +1787,20 @@ void Environment::RunTimers(uv_timer_t* handle) {
     TryCatchScope try_catch(env);
     try_catch.SetVerbose(true);
     ret = cb->Call(env->context(), process, 1, &arg);
+#if defined(NODE_USE_V8SHIM)
+    // A due expiry means the JS handed back between two timers: run the
+    // microtasks and ticks, then the rest of the due timers, in this phase.
+    if (!ret.IsEmpty() && env->can_call_into_js()) {
+      int64_t expiry = ret.ToLocalChecked()->IntegerValue(env->context())
+                           .FromMaybe(0);
+      if (expiry != 0 &&
+          static_cast<double>(llabs(expiry)) <=
+              arg->NumberValue(env->context()).FromMaybe(0)) {
+        RunTicksAndMicrotasks(env);
+        ret = MaybeLocal<Value>();
+      }
+    }
+#endif
   } while (ret.IsEmpty() && env->can_call_into_js());
 
   // NOTE(apapirovski): If it ever becomes possible that `call_into_js` above
