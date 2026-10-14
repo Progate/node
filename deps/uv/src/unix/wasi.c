@@ -21,9 +21,15 @@
 
 /* WebAssembly (wasm32-wasip1-threads) running on BrowserOS.
  *
- * There is one linear memory of at most 4 GiB and no /proc. The event loop is
- * the poll(2) one (posix-poll.c) and processes are started with
- * posix_spawn(3) (process.c).
+ * There is one linear memory of at most 4 GiB. The event loop is the poll(2)
+ * one (posix-poll.c) and processes are started with posix_spawn(3)
+ * (process.c).
+ *
+ * The BrowserOS kernel has a procfs with the system-wide files it can measure
+ * (/proc/uptime, /proc/loadavg, /proc/cpuinfo) and reads them out of its own
+ * tables, so the system information below comes from there like on Linux. It
+ * deliberately has no /proc/stat or /proc/meminfo: it cannot measure CPU time
+ * or resident memory and does not fill them with zeros.
  */
 
 #include "uv.h"
@@ -31,6 +37,7 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -91,7 +98,18 @@ int uv_get_process_title(char* buffer, size_t size) {
 }
 
 
+/* The kernel counts the runnable threads of wasm processes and keeps the
+ * averages in /proc/loadavg, in the proc(5) format.
+ */
 void uv_loadavg(double avg[3]) {
+  char buf[128];  /* Large enough to hold all of /proc/loadavg. */
+  double loads[3];
+
+  if (0 == uv__slurp("/proc/loadavg", buf, sizeof(buf)) &&
+      3 == sscanf(buf, "%lf %lf %lf", &loads[0], &loads[1], &loads[2])) {
+    memcpy(avg, loads, sizeof(loads));
+    return;
+  }
   avg[0] = 0;
   avg[1] = 0;
   avg[2] = 0;
@@ -139,8 +157,16 @@ int uv_resident_set_memory(size_t* rss) {
 }
 
 
+/* /proc/uptime is the time since the OS booted. CLOCK_MONOTONIC is the
+ * fallback for a world without the kernel's procfs.
+ */
 int uv_uptime(double* uptime) {
   struct timespec now;
+  char buf[128];
+
+  if (0 == uv__slurp("/proc/uptime", buf, sizeof(buf)))
+    if (1 == sscanf(buf, "%lf", uptime))
+      return 0;
 
   if (clock_gettime(CLOCK_MONOTONIC, &now))
     return UV__ERR(errno);
@@ -149,24 +175,93 @@ int uv_uptime(double* uptime) {
 }
 
 
+/* Reads /proc/cpuinfo like linux.c does: one record per "processor" line, with
+ * the model from its "model name" line, or "unknown" when the record has none.
+ * The kernel only knows how many logical CPUs the host has, so today every
+ * model is "unknown". Speeds and times stay 0: there is no cpufreq in /sys and
+ * no /proc/stat, because the kernel cannot measure them.
+ */
+static int uv__read_cpuinfo(char (**models)[64], int* count) {
+  static const char model_marker[] = "model name\t: ";
+  char (*found)[64];
+  char (*grown)[64];
+  char buf[1024];
+  unsigned cpu;
+  FILE* fp;
+  size_t n;
+  int capacity;
+  int i;
+
+  fp = uv__open_file("/proc/cpuinfo");
+  if (fp == NULL)
+    return UV__ERR(errno);
+
+  found = NULL;
+  capacity = 0;
+  i = -1;
+  while (fgets(buf, sizeof(buf), fp)) {
+    if (1 == sscanf(buf, "processor\t: %u", &cpu)) {
+      i++;
+      if (i == capacity) {
+        capacity = capacity == 0 ? 8 : capacity * 2;
+        grown = uv__reallocf(found, capacity * sizeof(*found));
+        if (grown == NULL) {
+          fclose(fp);
+          return UV_ENOMEM;
+        }
+        found = grown;
+      }
+      snprintf(found[i], sizeof(found[i]), "unknown");
+      continue;
+    }
+    if (i >= 0 && !strncmp(buf, model_marker, sizeof(model_marker) - 1)) {
+      n = strcspn(buf + sizeof(model_marker) - 1, "\n");
+      if (n >= sizeof(found[i]))
+        n = sizeof(found[i]) - 1;
+      memcpy(found[i], buf + sizeof(model_marker) - 1, n);
+      found[i][n] = '\0';
+    }
+  }
+  fclose(fp);
+
+  if (i < 0) {
+    uv__free(found);
+    return UV_EINVAL;
+  }
+  *models = found;
+  *count = i + 1;
+  return 0;
+}
+
+
 int uv_cpu_info(uv_cpu_info_t** cpu_infos, int* count) {
   uv_cpu_info_t* cpu_info;
+  char (*models)[64];
   int n;
   int i;
 
-  n = (int) uv_available_parallelism();
+  /* Without the kernel's procfs, fall back to the count libc gives. */
+  if (uv__read_cpuinfo(&models, &n)) {
+    models = NULL;
+    n = (int) uv_available_parallelism();
+  }
+
   cpu_info = uv__calloc(n, sizeof(*cpu_info));
-  if (cpu_info == NULL)
+  if (cpu_info == NULL) {
+    uv__free(models);
     return UV_ENOMEM;
+  }
 
   for (i = 0; i < n; i++) {
-    cpu_info[i].model = uv__strdup("wasm32");
+    cpu_info[i].model = uv__strdup(models != NULL ? models[i] : "unknown");
     if (cpu_info[i].model == NULL) {
       uv_free_cpu_info(cpu_info, i);
+      uv__free(models);
       return UV_ENOMEM;
     }
   }
 
+  uv__free(models);
   *cpu_infos = cpu_info;
   *count = n;
   return 0;
