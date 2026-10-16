@@ -75,6 +75,25 @@ int32_t uv__wasi_poll_oneoff_suspending(const __wasi_subscription_t* in,
 
 int uv__wasi_can_suspend(void) __attribute__((weak));
 
+/* poll_oneoff reports the errno of WASI; the libc's errno is Linux's. */
+static int uv__wasi_errno(int32_t error) {
+  switch (error) {
+    case __WASI_ERRNO_2BIG: return E2BIG;
+    case __WASI_ERRNO_ACCES: return EACCES;
+    case __WASI_ERRNO_AGAIN: return EAGAIN;
+    case __WASI_ERRNO_BADF: return EBADF;
+    case __WASI_ERRNO_FAULT: return EFAULT;
+    case __WASI_ERRNO_INTR: return EINTR;
+    case __WASI_ERRNO_INVAL: return EINVAL;
+    case __WASI_ERRNO_IO: return EIO;
+    case __WASI_ERRNO_NOMEM: return ENOMEM;
+    case __WASI_ERRNO_NOSYS: return ENOSYS;
+    case __WASI_ERRNO_NOTSUP: return ENOTSUP;
+    case __WASI_ERRNO_PIPE: return EPIPE;
+    default: return EIO;
+  }
+}
+
 /* poll(2) through the suspending poll_oneoff, as wasi-libc builds it. */
 static int uv__wasi_poll_suspending(struct pollfd* fds,
                                     nfds_t nfds,
@@ -89,14 +108,14 @@ static int uv__wasi_poll_suspending(struct pollfd* fds,
   for (i = 0; i < nfds; i++) {
     fds[i].revents = 0;
     if (fds[i].fd < 0) continue;
-    if (fds[i].events & POLLRDNORM) {
+    if (fds[i].events & (POLLIN | POLLRDNORM)) {
       subscriptions[nsubscriptions++] = (__wasi_subscription_t){
           .userdata = (uintptr_t)&fds[i],
           .u.tag = __WASI_EVENTTYPE_FD_READ,
           .u.u.fd_read.file_descriptor = fds[i].fd,
       };
     }
-    if (fds[i].events & POLLWRNORM) {
+    if (fds[i].events & (POLLOUT | POLLWRNORM)) {
       subscriptions[nsubscriptions++] = (__wasi_subscription_t){
           .userdata = (uintptr_t)&fds[i],
           .u.tag = __WASI_EVENTTYPE_FD_WRITE,
@@ -116,7 +135,7 @@ static int uv__wasi_poll_suspending(struct pollfd* fds,
   int32_t error = uv__wasi_poll_oneoff_suspending(subscriptions, events,
                                                   nsubscriptions, &nevents);
   if (error != 0) {
-    errno = error;
+    errno = uv__wasi_errno(error);
     return -1;
   }
 
@@ -134,8 +153,11 @@ static int uv__wasi_poll_suspending(struct pollfd* fds,
     } else if (event->error != 0) {
       pollfd->revents |= POLLERR;
     } else {
+      /* As poll(2): the readiness bits the caller asked for. */
       pollfd->revents |=
-          event->type == __WASI_EVENTTYPE_FD_READ ? POLLRDNORM : POLLWRNORM;
+          pollfd->events & (event->type == __WASI_EVENTTYPE_FD_READ
+                                ? (POLLIN | POLLRDNORM)
+                                : (POLLOUT | POLLWRNORM));
       if (event->fd_readwrite.flags & __WASI_EVENTRWFLAGS_FD_READWRITE_HANGUP)
         pollfd->revents |= POLLHUP;
     }
@@ -143,7 +165,7 @@ static int uv__wasi_poll_suspending(struct pollfd* fds,
 
   count = 0;
   for (i = 0; i < nfds; i++) {
-    if (fds[i].revents & POLLHUP) fds[i].revents &= ~POLLWRNORM;
+    if (fds[i].revents & POLLHUP) fds[i].revents &= ~(POLLOUT | POLLWRNORM);
     if (fds[i].revents != 0) count++;
   }
   return count;
