@@ -19,10 +19,11 @@
  * IN THE SOFTWARE.
  */
 
-/* uv_fs_event_t on WASI (BrowserOS), from the inotify(7) BrowserOS adds as
- * host functions (browser_os_inotify). The events come from read(2) on the
- * inotify descriptor as struct inotify_event records, as on Linux, so this is
- * linux.c's implementation with the system calls declared here.
+/* uv_fs_event_t on WASI (BrowserOS), from the inotify(7) of the BrowserOS
+ * kernel. The libc has <sys/inotify.h> (the kernel's inotify_init1(2),
+ * inotify_add_watch(2) and inotify_rm_watch(2)), and the events come from
+ * read(2) on the inotify descriptor as struct inotify_event records, so this is
+ * linux.c's implementation.
  */
 
 #include "uv.h"
@@ -33,85 +34,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/inotify.h>
 #include <unistd.h>
-
-#define IN_MODIFY 0x00000002
-#define IN_ATTRIB 0x00000004
-#define IN_MOVED_FROM 0x00000040
-#define IN_MOVED_TO 0x00000080
-#define IN_CREATE 0x00000100
-#define IN_DELETE 0x00000200
-#define IN_DELETE_SELF 0x00000400
-#define IN_MOVE_SELF 0x00000800
-#define IN_NONBLOCK 04000
-#define IN_CLOEXEC 02000000
-
-struct inotify_event {
-  int wd;
-  uint32_t mask;
-  uint32_t cookie;
-  uint32_t len;
-  char name[];
-};
-
-/* The host functions return an errno (0 on success). */
-__attribute__((import_module("browser_os_inotify"), import_name("inotify_init1")))
-int32_t uv__host_inotify_init1(int32_t flags, int32_t* fd);
-__attribute__((import_module("browser_os_inotify"), import_name("inotify_add_watch")))
-int32_t uv__host_inotify_add_watch(int32_t fd, const char* path, size_t length,
-                                   uint32_t mask, int32_t* wd);
-__attribute__((import_module("browser_os_inotify"), import_name("inotify_rm_watch")))
-int32_t uv__host_inotify_rm_watch(int32_t fd, int32_t wd);
-
-static int inotify_init1(int flags) {
-  int32_t fd;
-  int32_t err = uv__host_inotify_init1(flags, &fd);
-  if (err) {
-    errno = err;
-    return -1;
-  }
-  return fd;
-}
-
-/* The host takes absolute paths: the working directory is the libc's. */
-static int inotify_add_watch(int fd, const char* path, uint32_t mask) {
-  char* absolute = NULL;
-  int32_t wd;
-  int32_t err;
-
-  if (path[0] != '/') {
-    char cwd[4096];
-    size_t cwd_len;
-    if (getcwd(cwd, sizeof(cwd)) == NULL)
-      return -1;
-    cwd_len = strlen(cwd);
-    absolute = uv__malloc(cwd_len + strlen(path) + 2);
-    if (absolute == NULL) {
-      errno = ENOMEM;
-      return -1;
-    }
-    memcpy(absolute, cwd, cwd_len);
-    absolute[cwd_len] = '/';
-    strcpy(absolute + cwd_len + 1, path);
-    path = absolute;
-  }
-  err = uv__host_inotify_add_watch(fd, path, strlen(path), mask, &wd);
-  uv__free(absolute);
-  if (err) {
-    errno = err;
-    return -1;
-  }
-  return wd;
-}
-
-static int inotify_rm_watch(int fd, int wd) {
-  int32_t err = uv__host_inotify_rm_watch(fd, wd);
-  if (err) {
-    errno = err;
-    return -1;
-  }
-  return 0;
-}
 
 struct watcher_list {
   RB_ENTRY(watcher_list) entry;
