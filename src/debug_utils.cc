@@ -15,7 +15,7 @@
 #if defined(__linux__) && !defined(__GLIBC__) || \
     defined(__UCLIBC__) || \
     defined(_AIX) || \
-    defined(__wasi__)
+    defined(__BROWSEROS__)
 #define HAVE_EXECINFO_H 0
 #else
 #define HAVE_EXECINFO_H 1

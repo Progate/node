@@ -763,7 +763,7 @@ static void PrintEnvironmentVariables(JSONWriter* writer) {
 
 // Report operating system information.
 static void PrintSystemInformation(JSONWriter* writer) {
-#if !defined(_WIN32) && !defined(__wasi__)
+#if !defined(_WIN32) && !defined(__BROWSEROS__)
   static struct {
     const char* description;
     int id;
@@ -809,7 +809,7 @@ static void PrintSystemInformation(JSONWriter* writer) {
     }
   }
   writer->json_objectend();
-#endif  // !defined(_WIN32) && !defined(__wasi__)
+#endif  // !defined(_WIN32) && !defined(__BROWSEROS__)
 
   PrintLoadedLibraries(writer);
 }

@@ -485,7 +485,7 @@ void RegisterSignalHandler(int signal,
   memset(&sa, 0, sizeof(sa));
   sa.sa_sigaction = handler;
   sa.sa_flags = reset_handler ? SA_RESETHAND : 0;
-#if defined(__wasi__)
+#if defined(__BROWSEROS__)
   // The handler takes three arguments (sa_sigaction). Without SA_SIGINFO the
   // libc calls it as sa_handler, with one, and WebAssembly traps on the
   // signature mismatch that native ABIs let pass.
@@ -633,7 +633,7 @@ static void PlatformInit(ProcessInitializationFlags::Flags flags) {
     RegisterSignalHandler(SIGTERM, SignalExit, true);
   }
 
-#if !defined(__wasi__)
+#if !defined(__BROWSEROS__)
   if (!(flags & ProcessInitializationFlags::kNoAdjustResourceLimits)) {
     // Raise the open file descriptor limit.
     struct rlimit lim;
@@ -656,7 +656,7 @@ static void PlatformInit(ProcessInitializationFlags::Flags flags) {
       } while (min + 1 < max);
     }
   }
-#endif  // !defined(__wasi__)
+#endif  // !defined(__BROWSEROS__)
 #endif  // __POSIX__
 #ifdef _WIN32
   if (!(flags & ProcessInitializationFlags::kNoStdioInitialization)) {

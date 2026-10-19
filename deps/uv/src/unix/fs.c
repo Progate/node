@@ -76,7 +76,7 @@
 #elif defined(__sun)      || \
       defined(__MVS__)    || \
       defined(__NetBSD__) || \
-      defined(__HAIKU__) || defined(__wasi__)  || \
+      defined(__HAIKU__) || defined(__BROWSEROS__)  || \
       defined(__QNX__)
 # include <sys/statvfs.h>
 #else
@@ -207,7 +207,7 @@ static ssize_t uv__fs_fdatasync(uv_fs_t* req) {
     || defined(_AIX71)                                                        \
     || defined(__DragonFly__)                                                 \
     || defined(__FreeBSD__)                                                   \
-    || defined(__HAIKU__) || defined(__wasi__)                                                     \
+    || defined(__HAIKU__) || defined(__BROWSEROS__)                                                     \
     || defined(__NetBSD__)                                                    \
     || defined(__OpenBSD__)                                                   \
     || defined(__linux__)                                                     \
@@ -238,7 +238,7 @@ static ssize_t uv__fs_futime(uv_fs_t* req) {
     || defined(_AIX71)                                                        \
     || defined(__DragonFly__)                                                 \
     || defined(__FreeBSD__)                                                   \
-    || defined(__HAIKU__) || defined(__wasi__)                                                     \
+    || defined(__HAIKU__) || defined(__BROWSEROS__)                                                     \
     || defined(__NetBSD__)                                                    \
     || defined(__OpenBSD__)                                                   \
     || defined(__linux__)                                                     \
@@ -275,7 +275,7 @@ static void uv__mkostemp_initonce(void) {
   /* z/os doesn't have RTLD_DEFAULT but that's okay
    * because it doesn't have mkostemp(O_CLOEXEC) either.
    */
-#if defined(__wasi__)
+#if defined(__BROWSEROS__)
   /* No dynamic symbol lookup; mkstemp() with FD_CLOEXEC is used instead. */
 #elif defined(RTLD_DEFAULT)
   uv__mkostemp = (int (*)(char*, int)) dlsym(RTLD_DEFAULT, "mkostemp");
@@ -453,7 +453,7 @@ static ssize_t uv__pwritev_emul(int fd,
 }
 
 
-#if defined(__wasi__)
+#if defined(__BROWSEROS__)
 /* WASI's fd_pread and fd_pwrite take an iovec list. These wrappers give
  * preadv/pwritev the signature of the cache below: wasm calls through a
  * function pointer only with its exact type. */
@@ -490,7 +490,7 @@ static ssize_t uv__preadv_or_pwritev(int fd,
 
   u.p = (void*) atomic_load_explicit(cache, memory_order_relaxed);
   if (u.p == NULL) {
-#if defined(__wasi__)
+#if defined(__BROWSEROS__)
     if (is_pread)
       u.f = uv__wasi_preadv;
     else
@@ -706,7 +706,7 @@ static int uv__fs_statfs(uv_fs_t* req) {
 #if defined(__sun)      || \
     defined(__MVS__)    || \
     defined(__NetBSD__) || \
-    defined(__HAIKU__) || defined(__wasi__)  || \
+    defined(__HAIKU__) || defined(__BROWSEROS__)  || \
     defined(__QNX__)
   struct statvfs buf;
 
@@ -728,7 +728,7 @@ static int uv__fs_statfs(uv_fs_t* req) {
     defined(__MVS__)      || \
     defined(__OpenBSD__)  || \
     defined(__NetBSD__)   || \
-    defined(__HAIKU__) || defined(__wasi__)    || \
+    defined(__HAIKU__) || defined(__BROWSEROS__)    || \
     defined(__QNX__)
   stat_fs->f_type = 0;  /* f_type is not supported. */
 #else
@@ -1172,7 +1172,7 @@ static ssize_t uv__fs_utime(uv_fs_t* req) {
     || defined(_AIX71)                                                        \
     || defined(__DragonFly__)                                                 \
     || defined(__FreeBSD__)                                                   \
-    || defined(__HAIKU__) || defined(__wasi__)                                                     \
+    || defined(__HAIKU__) || defined(__BROWSEROS__)                                                     \
     || defined(__NetBSD__)                                                    \
     || defined(__OpenBSD__)                                                   \
     || defined(__linux__)                                                     \
@@ -1207,7 +1207,7 @@ static ssize_t uv__fs_lutime(uv_fs_t* req) {
     || defined(_AIX71)                                                        \
     || defined(__DragonFly__)                                                 \
     || defined(__FreeBSD__)                                                   \
-    || defined(__HAIKU__) || defined(__wasi__)                                                     \
+    || defined(__HAIKU__) || defined(__BROWSEROS__)                                                     \
     || defined(__NetBSD__)                                                    \
     || defined(__OpenBSD__)                                                   \
     || defined(__linux__)                                                     \

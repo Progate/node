@@ -22,7 +22,7 @@
 #ifndef UV_POSIX_H
 #define UV_POSIX_H
 
-#if defined(__wasi__)
+#if defined(__BROWSEROS__)
 /* BrowserOS gives WASI programs inotify(7); uv_fs_event_t uses it as on
  * Linux (src/unix/wasi-inotify.c). */
 #define UV_PLATFORM_LOOP_FIELDS                                               \

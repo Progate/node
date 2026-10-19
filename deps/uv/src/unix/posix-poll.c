@@ -38,14 +38,14 @@ int uv__platform_loop_init(uv_loop_t* loop) {
   loop->poll_fds_used = 0;
   loop->poll_fds_size = 0;
   loop->poll_fds_iterating = 0;
-#if defined(__wasi__)
+#if defined(__BROWSEROS__)
   uv__inotify_loop_init(loop);
 #endif
   return 0;
 }
 
 void uv__platform_loop_delete(uv_loop_t* loop) {
-#if defined(__wasi__)
+#if defined(__BROWSEROS__)
   uv__inotify_loop_delete(loop);
 #endif
   uv__free(loop->poll_fds);
@@ -57,8 +57,8 @@ int uv__io_fork(uv_loop_t* loop) {
   return uv__platform_loop_init(loop);
 }
 
-#if defined(__wasi__)
-#include <wasi/api.h>
+#if defined(__BROWSEROS__)
+#include "wasi-abi.h"
 
 /* BrowserOS: a thread whose host engine runs JavaScript (node's isolates in
  * @progate/browser-v8) has work of the host's own to do while the loop waits:
@@ -327,7 +327,7 @@ void uv__io_poll(uv_loop_t* loop, int timeout) {
    */
   for (;;) {
     uv__io_poll_prepare(loop, pset, timeout);
-#if defined(__wasi__)
+#if defined(__BROWSEROS__)
     nfds = uv__wasi_poll(loop->poll_fds, (nfds_t)loop->poll_fds_used, timeout);
 #else
     nfds = poll(loop->poll_fds, (nfds_t)loop->poll_fds_used, timeout);

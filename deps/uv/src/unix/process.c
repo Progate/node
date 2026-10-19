@@ -35,7 +35,7 @@
 #include <fcntl.h>
 #include <poll.h>
 
-#if defined(__wasi__)
+#if defined(__BROWSEROS__)
 # include <spawn.h>
 extern char** environ;
 #endif
@@ -211,7 +211,7 @@ static int uv__process_init_stdio(uv_stdio_container_t* container,
     assert(container->data.stream != NULL);
     if (container->data.stream->type != UV_NAMED_PIPE)
       return UV_EINVAL;
-#if defined(__wasi__)
+#if defined(__BROWSEROS__)
     /* A child's stdin, stdout and stderr cannot be sockets here, only pipes:
      * fds[0] is the parent's end and fds[1] the child's, in the direction the
      * child uses it. A pipe asked for both ways (as node does) goes the way of
@@ -323,7 +323,7 @@ static void uv__write_errno(int error_fd) {
 }
 
 
-#if !defined(__wasi__)
+#if !defined(__BROWSEROS__)
 static void uv__process_child_init(const uv_process_options_t* options,
                                    int stdio_count,
                                    int (*pipes)[2],
@@ -455,7 +455,7 @@ static void uv__process_child_init(const uv_process_options_t* options,
 
   uv__write_errno(error_fd);
 }
-#endif  /* !defined(__wasi__) */
+#endif  /* !defined(__BROWSEROS__) */
 
 
 #if defined(__APPLE__)
@@ -857,7 +857,7 @@ error:
 }
 #endif
 
-#if defined(__wasi__)
+#if defined(__BROWSEROS__)
 /* WASI has no fork(). BrowserOS starts programs with posix_spawn(3), whose
  * file actions set up the child's stdio and working directory. */
 static int uv__spawn_and_init_child_wasi(const uv_process_options_t* options,
@@ -962,7 +962,7 @@ static int uv__spawn_and_init_child_fork(const uv_process_options_t* options,
   /* Fork succeeded, in the parent process */
   return 0;
 }
-#endif  /* defined(__wasi__) */
+#endif  /* defined(__BROWSEROS__) */
 
 static int uv__spawn_and_init_child(
     uv_loop_t* loop,
@@ -976,7 +976,7 @@ static int uv__spawn_and_init_child(
   int exec_errorno;
   ssize_t r;
 
-#if defined(__wasi__)
+#if defined(__BROWSEROS__)
   (void) signal_pipe;
   (void) status;
   (void) exec_errorno;
@@ -1076,7 +1076,7 @@ static int uv__spawn_and_init_child(
   uv__close_nocheckstdio(signal_pipe[0]);
 
   return err;
-#endif  /* defined(__wasi__) */
+#endif  /* defined(__BROWSEROS__) */
 }
 #endif /* ISN'T TARGET_OS_TV || TARGET_OS_WATCH */
 

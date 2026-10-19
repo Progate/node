@@ -135,7 +135,7 @@ int uv_thread_detach(uv_thread_t *tid) {
 }
 
 
-#if defined(__wasi__)
+#if defined(__BROWSEROS__)
 /* WebAssembly calls through a function pointer only with its exact type, so
  * `entry` cannot be passed to pthread_create() as a start routine. */
 struct uv__thread_start_args {
@@ -197,7 +197,7 @@ int uv_thread_create_ex(uv_thread_t* tid,
       abort();
   }
 
-#if defined(__wasi__)
+#if defined(__BROWSEROS__)
   {
     struct uv__thread_start_args* start;
 
@@ -934,7 +934,7 @@ void uv_key_set(uv_key_t* key, void* value) {
 }
 
 #if defined(_AIX) || defined(__MVS__) || defined(__PASE__) || \
-    defined(__wasi__)
+    defined(__BROWSEROS__)
 int uv__thread_setname(const char* name) {
   return UV_ENOSYS;
 }
@@ -976,7 +976,7 @@ int uv__thread_setname(const char* name) {
     defined(_AIX) || \
     defined(__MVS__) || \
     defined(__PASE__) || \
-    defined(__wasi__)
+    defined(__BROWSEROS__)
 int uv__thread_getname(uv_thread_t* tid, char* name, size_t size) {
   return UV_ENOSYS;
 }

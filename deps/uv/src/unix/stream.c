@@ -622,7 +622,7 @@ int uv_listen(uv_stream_t* stream, int backlog, uv_connection_cb cb) {
 }
 
 
-#if defined(__wasi__)
+#if defined(__BROWSEROS__)
 /* A child's stdio is a pipe here, not a socket pair (see process.c), and
  * shutdown(2) does not work on a pipe. Closing the write end gives the reader
  * its EOF; the descriptor is kept, pointing at /dev/null, for uv_close(). */
