@@ -157,6 +157,16 @@ V8SHIM_IMPORT(bigint_value) int64_t bigint_value(Address value, int32_t is_unsig
 V8SHIM_IMPORT(identity_hash) int32_t identity_hash(Address value);
 // new Date(time).
 V8SHIM_IMPORT(date_new) Address date_new(double time);
+// The time value of a Date ([[DateValue]], not its valueOf).
+V8SHIM_IMPORT(date_value) double date_value(Address date);
+// value instanceof constructor: 1 or 0; -1 if it threw.
+V8SHIM_IMPORT(value_instance_of) int32_t value_instance_of(Address value, Address constructor);
+// The magnitude of a BigInt as 64-bit words, least significant first: how many there are.
+V8SHIM_IMPORT(bigint_word_count) int32_t bigint_word_count(Address value);
+// Writes the sign (1 if negative) and up to `capacity` words; returns how many the value has.
+V8SHIM_IMPORT(bigint_to_words) int32_t bigint_to_words(Address value, int32_t* sign_bit, int32_t capacity, uint64_t* words);
+// A BigInt from a sign and words; 0 if it threw (too large).
+V8SHIM_IMPORT(bigint_from_words) Address bigint_from_words(int32_t sign_bit, int32_t count, const uint64_t* words);
 // The host engine's heap, in bytes: 0 used, 1 total, 2 limit.
 V8SHIM_IMPORT(heap_size) double heap_size(int32_t which);
 

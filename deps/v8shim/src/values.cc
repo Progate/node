@@ -36,6 +36,9 @@ bool Value::FullIsNull() const { return Self(this) == shim::Null(); }
 bool Value::FullIsTrue() const { return Self(this) == shim::True(); }
 bool Value::FullIsFalse() const { return Self(this) == shim::False(); }
 bool Value::FullIsString() const { return Is(this, host::kIsString); }
+bool Value::IsName() const {
+  return Is(this, host::kIsString) || Is(this, host::kIsSymbol);
+}
 
 #define V8SHIM_VALUE_IS(Name, kind) \
   bool Value::Is##Name() const { return Is(this, host::kind); }
@@ -141,6 +144,21 @@ Maybe<double> Value::NumberValue(Local<Context> context) const {
   double value;
   if (!host::value_to_number(self, &value)) return Nothing<double>();
   return Just(value);
+}
+
+MaybeLocal<Number> Value::ToNumber(Local<Context> context) const {
+  if (Is(this, host::kIsNumber)) {
+    return Utils::ToLocal<Number>(Self(this));
+  }
+  Maybe<double> number = NumberValue(context);
+  if (number.IsNothing()) return MaybeLocal<Number>();
+  return Utils::ToLocal<Number>(host::number_new(number.FromJust()));
+}
+
+Maybe<bool> Value::InstanceOf(Local<Context> context, Local<Object> object) {
+  int32_t result = host::value_instance_of(Self(this), Utils::Open(object));
+  if (result < 0) return Nothing<bool>();
+  return Just(result != 0);
 }
 
 namespace {
@@ -257,6 +275,25 @@ uint64_t BigInt::Uint64Value(bool* lossless) const {
   uint64_t value = static_cast<uint64_t>(host::bigint_value(Self(this), 1, &exact));
   if (lossless != nullptr) *lossless = exact != 0;
   return value;
+}
+
+MaybeLocal<BigInt> BigInt::NewFromWords(Local<Context> context, int sign_bit,
+                                        int word_count, const uint64_t* words) {
+  if (word_count < 0) return MaybeLocal<BigInt>();
+  Address value = host::bigint_from_words(sign_bit != 0, word_count, words);
+  if (value == 0) return MaybeLocal<BigInt>();
+  return Utils::ToLocal<BigInt>(value);
+}
+
+int BigInt::WordCount() const { return host::bigint_word_count(Self(this)); }
+
+void BigInt::ToWordsArray(int* sign_bit, int* word_count,
+                          uint64_t* words) const {
+  // V8 writes at most *word_count words and then reports how many the value has.
+  int32_t sign = 0;
+  int32_t capacity = *word_count < 0 ? 0 : *word_count;
+  *word_count = host::bigint_to_words(Self(this), &sign, capacity, words);
+  *sign_bit = sign;
 }
 
 int64_t BigInt::Int64Value(bool* lossless) const {
@@ -479,5 +516,9 @@ void* External::Value(ExternalPointerTypeTag tag) const {
 MaybeLocal<Value> Date::New(Local<Context> context, double time) {
   return Utils::ToMaybeLocal<Value>(host::date_new(time));
 }
+
+double Date::ValueOf() const { return host::date_value(Self(this)); }
+
+void Date::CheckCast(Value* that) {}
 
 }  // namespace v8
