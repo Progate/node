@@ -57,6 +57,10 @@ struct State {
 
   // The innermost open TryCatch; each links to the one around it.
   TryCatch* try_catch_top = nullptr;
+
+  // What the embedder said it holds outside the heap
+  // (AdjustAmountOfExternalAllocatedMemory). The host engine collects on its own, so this is only reported back.
+  int64_t external_memory = 0;
 };
 
 // The state of the current thread's isolate.

@@ -197,6 +197,7 @@ ArrayBuffer::Allocator* ArrayBuffer::Allocator::NewDefaultAllocator() {
 void ArrayBuffer::CheckCast(Value* that) {}
 void ArrayBufferView::CheckCast(Value* that) {}
 void SharedArrayBuffer::CheckCast(Value* that) {}
+void TypedArray::CheckCast(Value* that) {}
 void PrimitiveArray::CheckCast(Data* that) {}
 
 std::unique_ptr<BackingStore> ArrayBuffer::NewBackingStore(
@@ -296,6 +297,13 @@ Local<SharedArrayBuffer> SharedArrayBuffer::New(
     host::shared_buffer_wait(data);
   return Utils::ToLocal<SharedArrayBuffer>(
       ArrayBufferFor(std::move(backing_store), true, false));
+}
+
+std::unique_ptr<BackingStore> SharedArrayBuffer::NewBackingStore(
+    void* data, size_t byte_length, BackingStore::DeleterCallback deleter,
+    void* deleter_data) {
+  return std::unique_ptr<BackingStore>(
+      NewStore(data, byte_length, true, deleter, deleter_data));
 }
 
 size_t SharedArrayBuffer::ByteLength() const {

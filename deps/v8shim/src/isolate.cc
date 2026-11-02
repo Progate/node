@@ -127,6 +127,12 @@ Local<Value> Isolate::ThrowException(Local<Value> exception) {
   return Utils::ToLocal<Value>(shim::Undefined());
 }
 
+int64_t Isolate::AdjustAmountOfExternalAllocatedMemory(int64_t change_in_bytes) {
+  int64_t& amount = shim::StateOf(this).external_memory;
+  amount += change_in_bytes;
+  return amount;
+}
+
 void Isolate::TerminateExecution() { shim::StateOf(this).terminating = true; }
 
 bool Isolate::IsExecutionTerminating() {

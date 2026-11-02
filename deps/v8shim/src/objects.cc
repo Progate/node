@@ -88,6 +88,10 @@ Maybe<bool> Object::Has(Local<Context> context, Local<Value> key) {
   return ToMaybeBool(host::object_has(Self(this), Utils::Open(key)));
 }
 
+Maybe<bool> Object::Has(Local<Context> context, uint32_t index) {
+  return ToMaybeBool(host::object_has(Self(this), host::number_new(index)));
+}
+
 Maybe<bool> Object::Delete(Local<Context> context, Local<Value> key) {
   return ToMaybeBool(host::object_delete(Self(this), Utils::Open(key)));
 }
