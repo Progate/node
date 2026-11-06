@@ -1,3 +1,6 @@
+#include <cstdio>
+#include <cstdlib>
+
 #include "debug_utils-inl.h"
 #include "env-inl.h"
 #include "node.h"
@@ -46,6 +49,105 @@ static bool SettleHostWork(Environment* env) {
   if (uv_loop_alive(env->event_loop())) return true;
   return v8shim_wait_host_tasks() != 0;
 }
+
+extern "C" int v8shim_event_loop_parks(void);
+extern "C" [[noreturn]] void v8shim_park_thread(void);
+extern "C" int32_t v8shim_host_tasks_pending(void);
+
+static Maybe<ExitCode> FinishEventLoop(Environment* env);
+
+namespace {
+
+// The main thread's loop, parked for the host to turn (an engine without JSPI:
+// see event_loop_parks in deps/v8shim/src/host.h).
+struct ParkedLoop {
+  Environment* env = nullptr;
+  MultiIsolatePlatform* platform = nullptr;
+  // Wakes a blocking turn's poll so the host gets the thread back now and then
+  // for its own work (messages from other threads, say). Unreferenced: it does
+  // not keep the loop alive.
+  uv_timer_t wake;
+  // The last turn found the loop with nothing left. One more turn after the
+  // host has run its microtasks tells whether they gave it work again.
+  bool drained = false;
+};
+ParkedLoop parked_loop;
+
+constexpr uint64_t kParkedWakeMs = 100;
+
+// What node_event_loop_turn returns.
+constexpr int32_t kTurnAgain = 0;      // work is ready: turn again right away
+constexpr int32_t kTurnIdle = 1;       // waiting: the next turn may block
+constexpr int32_t kTurnHostTasks = 2;  // only the host's pending work is left
+
+}  // namespace
+
+// One turn of the parked loop, for the host to call with no JavaScript on the
+// stack, after it has run the microtasks the previous turn queued. With
+// `may_block`, the turn waits in poll() for what comes next (at most
+// kParkedWakeMs). When the loop is done, the process exits from here.
+extern "C" __attribute__((export_name("node_event_loop_turn"))) int32_t
+node_event_loop_turn(int32_t may_block) {
+  Environment* env = parked_loop.env;
+  Isolate* isolate = env->isolate();
+  HandleScope handle_scope(isolate);
+  Context::Scope context_scope(env->context());
+  TickInfo* tick_info = env->tick_info();
+  uv_loop_t* loop = env->event_loop();
+
+  // The host ran the microtasks between the turns; process.nextTick() calls
+  // they made wait for node's tick callback, as after any callback into JS.
+  if (!env->is_stopping() &&
+      (tick_info->has_tick_scheduled() || tick_info->has_rejection_to_warn())) {
+    parked_loop.drained = false;
+    if (env->tick_callback_function()
+            ->Call(env->context(), env->process_object(), 0, nullptr)
+            .IsEmpty() ||
+        env->is_stopping()) {
+      exit(static_cast<int>(FinishEventLoop(env).FromMaybe(
+          ExitCode::kGenericUserError)));
+    }
+    return kTurnAgain;
+  }
+
+  // The previous turn found the loop with nothing left, and the host has run
+  // the microtasks since: decide only now, with no callback run in between
+  // (one could queue microtasks that give the loop work again).
+  if (parked_loop.drained && !env->is_stopping() && !uv_loop_alive(loop) &&
+      v8shim_host_tasks_pending() == 0) {
+    parked_loop.drained = false;
+    // Emit `beforeExit`; the loop goes on if that gave it work.
+    if (EmitProcessBeforeExit(env).IsJust() && !env->is_stopping()) {
+      HandleScope handle_scope(isolate);
+      if (!env->RunSnapshotSerializeCallback().IsEmpty() &&
+          uv_loop_alive(loop) && !env->is_stopping())
+        return kTurnAgain;
+    }
+    exit(static_cast<int>(
+        FinishEventLoop(env).FromMaybe(ExitCode::kGenericUserError)));
+  }
+  parked_loop.drained = false;
+
+  if (!env->is_stopping()) {
+    if (may_block)
+      uv_timer_start(&parked_loop.wake, [](uv_timer_t*) {}, kParkedWakeMs, 0);
+    uv_run(loop, may_block ? UV_RUN_ONCE : UV_RUN_NOWAIT);
+    uv_timer_stop(&parked_loop.wake);
+  }
+  if (!env->is_stopping()) parked_loop.platform->DrainTasks(isolate);
+
+  if (!env->is_stopping()) {
+    if (uv_loop_alive(loop))
+      return uv_backend_timeout(loop) == 0 ? kTurnAgain : kTurnIdle;
+    if (v8shim_host_tasks_pending() != 0) return kTurnHostTasks;
+    // Nothing left as far as the loop knows; the callbacks just run may have
+    // queued microtasks that change that. Let the host run them first.
+    parked_loop.drained = true;
+    return kTurnAgain;
+  }
+  exit(static_cast<int>(
+      FinishEventLoop(env).FromMaybe(ExitCode::kGenericUserError)));
+}
 #endif
 
 Maybe<ExitCode> SpinEventLoopInternal(Environment* env) {
@@ -65,6 +167,27 @@ Maybe<ExitCode> SpinEventLoopInternal(Environment* env) {
     bool more;
     env->performance_state()->Mark(
         node::performance::NODE_PERFORMANCE_MILESTONE_LOOP_START);
+#if defined(NODE_USE_V8SHIM)
+    // Without JSPI the thread cannot wait for the host's microtasks and events
+    // inside this loop: hand the loop to the host, which turns it from outside
+    // (node_event_loop_turn). Only the main thread does: it ends the process
+    // with exit(), while a worker's thread has its own ending to go through.
+    // A worker's thread has no such way out yet: say so and end it rather
+    // than leave its messages unanswered for good.
+    if (!env->is_main_thread() && v8shim_event_loop_parks()) {
+      fprintf(stderr,
+              "browser-nodev2: worker_threads needs JSPI "
+              "(WebAssembly.Suspending), which this browser does not have\n");
+      return Just(ExitCode::kGenericUserError);
+    }
+    if (env->is_main_thread() && v8shim_event_loop_parks()) {
+      parked_loop.env = env;
+      parked_loop.platform = platform;
+      uv_timer_init(env->event_loop(), &parked_loop.wake);
+      uv_unref(reinterpret_cast<uv_handle_t*>(&parked_loop.wake));
+      v8shim_park_thread();
+    }
+#endif
     do {
       if (env->is_stopping()) break;
       uv_run(env->event_loop(), UV_RUN_DEFAULT);
@@ -98,9 +221,16 @@ Maybe<ExitCode> SpinEventLoopInternal(Environment* env) {
       // event, or after running some callbacks.
       more = uv_loop_alive(env->event_loop());
     } while (more == true && !env->is_stopping());
-    env->performance_state()->Mark(
-        node::performance::NODE_PERFORMANCE_MILESTONE_LOOP_EXIT);
   }
+#if defined(NODE_USE_V8SHIM)
+  return FinishEventLoop(env);
+}
+
+// What follows the loop: shared with the parked loop's last turn.
+static Maybe<ExitCode> FinishEventLoop(Environment* env) {
+#endif
+  env->performance_state()->Mark(
+      node::performance::NODE_PERFORMANCE_MILESTONE_LOOP_EXIT);
   if (env->is_stopping()) return Nothing<ExitCode>();
 
   env->set_trace_sync_io(false);

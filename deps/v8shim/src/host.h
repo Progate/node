@@ -421,6 +421,12 @@ V8SHIM_IMPORT(shared_buffer_wait) int32_t shared_buffer_wait(uintptr_t data);
 // background compile tasks. host_tasks_wait suspends (JSPI) until one settles.
 V8SHIM_IMPORT(host_tasks_pending) int32_t host_tasks_pending();
 V8SHIM_IMPORT(host_tasks_wait) int32_t host_tasks_wait();
+// Whether the host engine lacks JSPI. Then no thread can suspend, and the main
+// thread's event loop hands its waiting to the host instead: node parks the
+// thread (v8shim_park_thread) and the host turns the loop from outside
+// (node_event_loop_turn in src/api/embed_helpers.cc), its own event loop and
+// microtasks running between the turns.
+V8SHIM_IMPORT(event_loop_parks) int32_t event_loop_parks();
 V8SHIM_IMPORT(array_buffer_length) uint32_t array_buffer_length(Address buffer);
 V8SHIM_IMPORT(array_buffer_was_detached) int32_t array_buffer_was_detached(Address buffer);
 V8SHIM_IMPORT(array_buffer_detach) void array_buffer_detach(Address buffer);

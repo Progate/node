@@ -156,6 +156,37 @@ extern "C" int v8shim_wait_host_tasks(void) {
   return 1;
 }
 
+extern "C" int v8shim_event_loop_parks(void) {
+  return host::event_loop_parks();
+}
+
+// The host's pending work (an async WebAssembly compile): the parked loop
+// hands that wait to the host as well.
+extern "C" int32_t v8shim_host_tasks_pending(void) {
+  return host::host_tasks_pending();
+}
+
+namespace {
+thread_local int32_t thread_parked = 0;
+}  // namespace
+
+// Whether this thread left its entry by parking: the host tells that from a
+// crash by asking after the entry threw.
+extern "C" __attribute__((export_name("v8shim_thread_parked"))) int32_t
+v8shim_thread_parked(void) {
+  return thread_parked;
+}
+
+// Leaves the thread's entry without unwinding it. A trap is the one way out of
+// wasm that nothing catches (neither C++'s catch (...) nor the cleanups that run
+// destructors), so the frames' objects in linear memory stay as they are and
+// the stack pointer keeps them below it: what the parked caller set up (node's
+// environment and its scopes) is still there for the host's later calls.
+extern "C" [[noreturn]] void v8shim_park_thread(void) {
+  thread_parked = 1;
+  __builtin_trap();
+}
+
 void Isolate::PerformMicrotaskCheckpoint() {
   DefaultMicrotaskQueue()->PerformCheckpoint(this);
 }
